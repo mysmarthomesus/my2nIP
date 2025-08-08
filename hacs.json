@@ -1,0 +1,7 @@
+{
+  "name": "2N IP Intercom Integration",
+  "render_readme": true,
+  "domains": ["2n_ip_intercom"],
+  "country": ["ALL"],
+  "homeassistant": "2023.8.0"
+}
