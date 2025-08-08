@@ -9,8 +9,8 @@ This custom component integrates the 2N IP Intercom via its HTTP API into Home A
 
 ## Installation
 HACS
-Add https://github.com/SVD-NL/helios2n-hass as a custom repository
-Download 2n/Helios through the regular explore & download prompt
+Add https://github.com/mysmarthomesus/my2nIP as a custom repository
+Download my2nIP through the regular explore & download prompt
 Restart Homeassistant
 
 1. Place the custom component folder under your Home Assistant configuration directory:
