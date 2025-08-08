@@ -1,6 +1,7 @@
 """Support for 2N IP Intercom switches."""
 from __future__ import annotations
 
+import aiohttp
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
