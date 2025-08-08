@@ -1,23 +1,49 @@
-from homeassistant.const import CONF_HOST, CONF_PORT, CONF_USERNAME, CONF_PASSWORD
+"""The 2N IP Intercom integration."""
+import asyncio
+import logging
+
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_PORT,
+    CONF_USERNAME,
+    CONF_PASSWORD,
+    Platform,
+)
+from homeassistant.exceptions import ConfigEntryNotReady
+
 from .const import DOMAIN
+from .coordinator import TwoNIntercomDataUpdateCoordinator
 
+_LOGGER = logging.getLogger(__name__)
 
-async def async_setup(hass, config):
-    hass.data.setdefault(DOMAIN, {})
+PLATFORMS = [Platform.SENSOR, Platform.SWITCH]
+
+async def async_setup(hass: HomeAssistant, config: dict):
+    """Set up the 2N IP Intercom component."""
+    hass.data[DOMAIN] = {}
     return True
 
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+    """Set up 2N IP Intercom from a config entry."""
+    coordinator = TwoNIntercomDataUpdateCoordinator(hass, entry.data)
 
-async def async_setup_entry(hass, entry):
-    hass.data[DOMAIN][entry.entry_id] = entry.data
-    hass.async_create_task(
-        hass.config_entries.async_forward_entry_setup(entry, "sensor")
-    )
-    hass.async_create_task(
-        hass.config_entries.async_forward_entry_setup(entry, "switch")
-    )
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except Exception as err:
+        raise ConfigEntryNotReady from err
+
+    hass.data[DOMAIN][entry.entry_id] = coordinator
+
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
     return True
 
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
+    """Unload a config entry."""
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok:
+        hass.data[DOMAIN].pop(entry.entry_id)
 
-async def async_unload_entry(hass, entry):
-    await hass.config_entries.async_forward_entry_unload(entry, "sensor")
-    return True
+    return unload_ok

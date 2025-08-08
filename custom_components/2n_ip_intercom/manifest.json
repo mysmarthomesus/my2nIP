@@ -1,8 +1,11 @@
 {
   "domain": "2n_ip_intercom",
   "name": "2N IP Intercom",
-  "documentation": "https://wiki.2n.com/hip/hapi/latest/en/2-popis-protokolu-http-api/",
+  "documentation": "https://github.com/mysmarthomesus/my2nIP",
   "dependencies": [],
   "codeowners": ["@mysmarthomesus"],
-  "version": "0.1.0"
+  "requirements": ["aiohttp"],
+  "version": "0.1.0",
+  "config_flow": true,
+  "iot_class": "local_polling"
 }

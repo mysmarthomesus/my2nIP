@@ -1,61 +1,65 @@
-from datetime import timedelta
-import logging
-import aiohttp
+"""Support for 2N IP Intercom sensors."""
+from __future__ import annotations
 
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.components.sensor import SensorEntity
-from homeassistant.const import CONF_HOST, CONF_PORT, CONF_USERNAME, CONF_PASSWORD
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorEntityDescription,
+)
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import DEVICE_CLASS_TIMESTAMP
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.typing import StateType
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+)
 
 from .const import DOMAIN
+from .coordinator import TwoNIntercomDataUpdateCoordinator
 
-_LOGGER = logging.getLogger(__name__)
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up 2N IP Intercom sensors based on a config entry."""
+    coordinator = hass.data[DOMAIN][entry.entry_id]
 
+    sensors = [
+        TwoNIntercomSensor(
+            coordinator,
+            SensorEntityDescription(
+                key="device_state",
+                name="Device State",
+                icon="mdi:door",
+            ),
+        ),
+    ]
 
-async def async_setup_entry(hass, entry, async_add_entities):
-    coordinator = TwoNIntercomDataUpdateCoordinator(hass, entry.data)
-    await coordinator.async_config_entry_first_refresh()
-    async_add_entities([TwoNIntercomSensor(coordinator, entry.data.get("host"))], True)
-
-
-class TwoNIntercomDataUpdateCoordinator(DataUpdateCoordinator):
-    def __init__(self, hass, config):
-        self.host = config[CONF_HOST]
-        self.port = config.get(CONF_PORT, 80)
-        self.username = config.get(CONF_USERNAME)
-        self.password = config.get(CONF_PASSWORD)
-        super().__init__(
-            hass,
-            _LOGGER,
-            name="2N IP Intercom",
-            update_interval=timedelta(seconds=30)
-        )
-
-    async def _async_update_data(self):
-        url = f"http://{self.host}:{self.port}/status"  # Adjust endpoint as needed.
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, auth=aiohttp.BasicAuth(self.username, self.password)) as response:
-                    if response.status != 200:
-                        raise UpdateFailed(f"Error fetching data: Status code {response.status}")
-                    data = await response.json()
-                    return data
-        except Exception as err:
-            raise UpdateFailed(f"Error communicating with 2N IP Intercom: {err}") from err
+    async_add_entities(sensors)
 
 
-class TwoNIntercomSensor(SensorEntity):
-    def __init__(self, coordinator, name):
-        self.coordinator = coordinator
-        self._attr_name = f"2N IP Intercom {name}"
-        self._state = None
+class TwoNIntercomSensor(CoordinatorEntity, SensorEntity):
+    """Representation of a 2N IP Intercom sensor."""
+
+    def __init__(
+        self,
+        coordinator: TwoNIntercomDataUpdateCoordinator,
+        description: SensorEntityDescription,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._attr_unique_id = f"{coordinator.host}_{description.key}"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, coordinator.host)},
+            "name": "2N IP Intercom",
+            "manufacturer": "2N",
+            "model": "IP Intercom",
+        }
 
     @property
-    def state(self):
-        data = self.coordinator.data
-        if data:
-            # Adjust this based on the proper key in the returned JSON
-            return data.get("call_status")
-        return None
-
-    async def async_update(self):
-        await self.coordinator.async_request_refresh()
+    def native_value(self) -> StateType:
+        """Return the state of the sensor."""
+        return self.coordinator.data.get("deviceState")
