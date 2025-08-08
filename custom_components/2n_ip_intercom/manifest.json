@@ -1,0 +1,8 @@
+{
+  "domain": "2n_ip_intercom",
+  "name": "2N IP Intercom",
+  "documentation": "https://wiki.2n.com/hip/hapi/latest/en/2-popis-protokolu-http-api/",
+  "dependencies": [],
+  "codeowners": ["@mysmarthomesus"],
+  "version": "0.1.0"
+}
