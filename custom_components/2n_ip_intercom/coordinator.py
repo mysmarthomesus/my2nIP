@@ -34,7 +34,7 @@ class TwoNIntercomDataUpdateCoordinator(DataUpdateCoordinator):
         self.username = config.get(CONF_USERNAME)
         self.password = config.get(CONF_PASSWORD)
         self.base_url = f"http://{self.host}:{self.port}"
-        self._session = aiohttp.ClientSession()
+        self._session = None
 
         super().__init__(
             hass,
@@ -42,10 +42,10 @@ class TwoNIntercomDataUpdateCoordinator(DataUpdateCoordinator):
             name=DOMAIN,
             update_interval=timedelta(seconds=30),
         )
-        
-    async def async_close(self) -> None:
-        """Close the session."""
-        if self._session:
+
+    async def async_shutdown(self) -> None:
+        """Shutdown the coordinator."""
+        if self._session and not self._session.closed:
             await self._session.close()
 
     async def _async_update_data(self):
@@ -60,24 +60,25 @@ class TwoNIntercomDataUpdateCoordinator(DataUpdateCoordinator):
                 "Connection": "keep-alive"
             }
 
-            async with self._session.get(
-                f"{self.base_url}{API_SYSTEM_STATUS}",
-                auth=auth,
-                headers=headers,
-                timeout=10,
-                ssl=False  # Most 2N devices use HTTP
-            ) as resp:
-                if resp.status == 401:
-                    raise UpdateFailed("Invalid authentication credentials")
-                if resp.status != 200:
-                    raise UpdateFailed(
-                        f"Error communicating with API: Status {resp.status}"
-                    )
-                try:
-                    data = await resp.json()
-                    return data
-                except ValueError as err:
-                    raise UpdateFailed(f"Invalid response from API: {err}") from err
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"{self.base_url}{API_SYSTEM_STATUS}",
+                    auth=auth,
+                    headers=headers,
+                    timeout=10,
+                    ssl=False  # Most 2N devices use HTTP
+                ) as resp:
+                    if resp.status == 401:
+                        raise UpdateFailed("Invalid authentication credentials")
+                    if resp.status != 200:
+                        raise UpdateFailed(
+                            f"Error communicating with API: Status {resp.status}"
+                        )
+                    try:
+                        data = await resp.json()
+                        return data
+                    except ValueError as err:
+                        raise UpdateFailed(f"Invalid response from API: {err}") from err
 
         except aiohttp.ClientConnectorError as err:
             raise UpdateFailed(f"Cannot connect to {self.host}:{self.port} - {err}") from err

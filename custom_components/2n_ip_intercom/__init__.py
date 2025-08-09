@@ -14,13 +14,11 @@ from homeassistant.const import (
 from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import DOMAIN
-
-PLATFORMS = [Platform.SENSOR, Platform.SWITCH, Platform.CAMERA]
 from .coordinator import TwoNIntercomDataUpdateCoordinator
 
-_LOGGER = logging.getLogger(__name__)
+PLATFORMS = [Platform.SENSOR, Platform.SWITCH, Platform.CAMERA]
 
-PLATFORMS = [Platform.SENSOR, Platform.SWITCH]
+_LOGGER = logging.getLogger(__name__)
 
 async def async_setup(hass: HomeAssistant, config: dict):
     """Set up the 2N IP Intercom component."""
@@ -46,6 +44,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
+        coordinator = hass.data[DOMAIN].pop(entry.entry_id)
+        await coordinator.async_shutdown()
 
     return unload_ok
