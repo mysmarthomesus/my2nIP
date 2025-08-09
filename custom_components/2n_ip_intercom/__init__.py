@@ -14,6 +14,8 @@ from homeassistant.const import (
 from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import DOMAIN
+
+PLATFORMS = [Platform.SENSOR, Platform.SWITCH, Platform.CAMERA]
 from .coordinator import TwoNIntercomDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
