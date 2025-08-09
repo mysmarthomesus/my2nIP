@@ -60,25 +60,45 @@ class TwoNIntercomDataUpdateCoordinator(DataUpdateCoordinator):
                 "Connection": "keep-alive"
             }
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{self.base_url}{API_SYSTEM_STATUS}",
-                    auth=auth,
-                    headers=headers,
-                    timeout=10,
-                    ssl=False  # Most 2N devices use HTTP
-                ) as resp:
-                    if resp.status == 401:
-                        raise UpdateFailed("Invalid authentication credentials")
-                    if resp.status != 200:
-                        raise UpdateFailed(
-                            f"Error communicating with API: Status {resp.status}"
-                        )
-                    try:
-                        data = await resp.json()
-                        return data
-                    except ValueError as err:
-                        raise UpdateFailed(f"Invalid response from API: {err}") from err
+            _LOGGER.debug("Attempting to connect to %s:%s", self.host, self.port)
+
+            try:
+                async with aiohttp.ClientSession() as session:
+                    url = f"{self.base_url}{API_SYSTEM_STATUS}"
+                    _LOGGER.debug("Requesting URL: %s", url)
+                    
+                    async with session.get(
+                        url,
+                        auth=auth,
+                        headers=headers,
+                        timeout=10,
+                        ssl=False  # Most 2N devices use HTTP
+                    ) as resp:
+                        _LOGGER.debug("Response status: %s", resp.status)
+                        
+                        if resp.status == 401:
+                            raise UpdateFailed("Invalid authentication credentials")
+                        if resp.status != 200:
+                            content = await resp.text()
+                            _LOGGER.debug("Error response content: %s", content)
+                            raise UpdateFailed(
+                                f"Error communicating with API: Status {resp.status}"
+                            )
+                        
+                        content = await resp.text()
+                        _LOGGER.debug("Response content: %s", content)
+                        
+                        try:
+                            data = await resp.json()
+                            _LOGGER.debug("Parsed JSON data: %s", data)
+                            return data
+                        except ValueError as err:
+                            raise UpdateFailed(f"Invalid JSON response from API: {err}") from err
+                            
+            except aiohttp.ClientConnectorError as err:
+                raise UpdateFailed(f"Connection failed to {self.host}:{self.port} - {err}") from err
+            except asyncio.TimeoutError:
+                raise UpdateFailed(f"Timeout connecting to {self.host}:{self.port}") from None
 
         except aiohttp.ClientConnectorError as err:
             raise UpdateFailed(f"Cannot connect to {self.host}:{self.port} - {err}") from err

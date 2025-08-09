@@ -6,7 +6,7 @@ DEFAULT_USERNAME = "admin"
 DEFAULT_PASSWORD = "2n"
 
 # API endpoints
-API_SYSTEM_STATUS = "/api/system/status"
+API_SYSTEM_STATUS = "/api/system/info"
 API_SWITCH_CONTROL = "/api/switch/ctrl"
 API_DOOR_CONTROL = "/api/door/ctrl"
 
