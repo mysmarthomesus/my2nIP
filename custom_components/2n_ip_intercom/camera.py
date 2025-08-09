@@ -59,7 +59,8 @@ class TwoNCamera(Camera):
         if self.coordinator.username and self.coordinator.password:
             auth_string = f"{self.coordinator.username}:{self.coordinator.password}@"
             
-        return f"rtsp://{auth_string}{self.coordinator.host}:{self.coordinator.port}/live/ch{self.camera_id}"
+        # 2N devices use port 554 for RTSP by default
+        return f"rtsp://{auth_string}{self.coordinator.host}:554/h264_stream"
 
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
@@ -71,19 +72,43 @@ class TwoNCamera(Camera):
             if self.coordinator.username and self.coordinator.password:
                 auth = aiohttp.BasicAuth(self.coordinator.username, self.coordinator.password)
 
-            url = f"http://{self.coordinator.host}/api/camera/{self.camera_id}/snapshot"
+            # 2N uses this endpoint for snapshots
+            url = f"http://{self.coordinator.host}/api/camera/snapshot"
             
-            async with websession.get(url, auth=auth) as response:
+            async with websession.get(
+                url,
+                auth=auth,
+                timeout=10,
+                ssl=False,
+            ) as response:
                 if response.status == 200:
                     return await response.read()
-                
-                _LOGGER.error(
-                    "Error getting camera image from %s: %s",
-                    self.coordinator.host,
-                    response.status,
-                )
+                elif response.status == 401:
+                    _LOGGER.error(
+                        "Authentication failed for camera snapshot. Check username/password."
+                    )
+                else:
+                    _LOGGER.error(
+                        "Error getting camera image from %s: %s",
+                        self.coordinator.host,
+                        response.status,
+                    )
+                    
+                try:
+                    error_text = await response.text()
+                    _LOGGER.debug("Error response: %s", error_text)
+                except Exception as e:
+                    _LOGGER.debug("Could not read error response: %s", e)
                 
         except Exception as err:
             _LOGGER.error("Error getting camera image: %s", err)
             
         return None
+
+    @property
+    def extra_state_attributes(self):
+        """Return the camera state attributes."""
+        return {
+            "rtsp_url": f"rtsp://{self.coordinator.host}:554/h264_stream",
+            "snapshot_url": f"http://{self.coordinator.host}/api/camera/snapshot",
+        }
