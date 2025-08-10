@@ -3,12 +3,11 @@ DOMAIN = "2n_ip_intercom"
 
 DEFAULT_PORT = 80
 DEFAULT_USERNAME = "admin"
-DEFAULT_PASSWORD = "Ka"
+DEFAULT_PASSWORD = "2n"
 
 # API endpoints
 API_SYSTEM_STATUS = "/api/system/info"
 API_SWITCH_CONTROL = "/api/switch/ctrl"
-API_SWITCH_STATUS = "/api/switch/status"
 API_DOOR_CONTROL = "/api/door/ctrl"
 
 # Available controls

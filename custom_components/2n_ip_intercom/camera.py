@@ -13,11 +13,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import (
-    DOMAIN,
-    DEFAULT_USERNAME,
-    DEFAULT_PASSWORD,
-)
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,14 +34,12 @@ async def async_setup_entry(
 class TwoNCamera(Camera):
     """Implementation of a 2N IP Intercom camera."""
 
-    _attr_has_entity_name = True
-
     def __init__(self, coordinator, camera_id):
         """Initialize the camera."""
         super().__init__()
         self.coordinator = coordinator
         self.camera_id = camera_id
-        self._attr_name = f"Camera {camera_id}"  # Will appear as "2N IP Intercom Camera 1"
+        self._attr_name = f"2N Camera {camera_id}"
         self._attr_unique_id = f"{coordinator.host}_camera_{camera_id}"
         self._stream_source = None
         self._last_image = None
@@ -56,22 +50,14 @@ class TwoNCamera(Camera):
             "identifiers": {(DOMAIN, coordinator.host)},
             "name": "2N IP Intercom",
             "manufacturer": "2N",
-            "model": "IP Intercom"
+            "model": "IP Intercom",
         }
-        
-        # Update with device info if available
-        if coordinator.device_info:
-            self._attr_device_info.update({
-                "name": coordinator.device_info.get("model", "2N IP Intercom"),
-                "model": coordinator.device_info.get("model", "IP Intercom"),
-                "sw_version": coordinator.device_info.get("firmwareVersion"),
-            })
 
     async def stream_source(self) -> str | None:
         """Return the RTSP stream source."""
-        username = self.coordinator.username or DEFAULT_USERNAME
-        password = self.coordinator.password or DEFAULT_PASSWORD
-        auth_string = f"{username}:{password}@"
+        auth_string = ""
+        if self.coordinator.username and self.coordinator.password:
+            auth_string = f"{self.coordinator.username}:{self.coordinator.password}@"
             
         # 2N devices use port 554 for RTSP by default
         return f"rtsp://{auth_string}{self.coordinator.host}:554/h264_stream"
@@ -82,19 +68,12 @@ class TwoNCamera(Camera):
         """Return a still image from the camera."""
         try:
             websession = async_get_clientsession(self.hass)
-            auth = aiohttp.BasicAuth(
-                login=self.coordinator.username or DEFAULT_USERNAME,
-                password=self.coordinator.password or DEFAULT_PASSWORD,
-            )
+            auth = None
+            if self.coordinator.username and self.coordinator.password:
+                auth = aiohttp.BasicAuth(self.coordinator.username, self.coordinator.password)
 
             # 2N uses this endpoint for snapshots
-            url = f"{self.coordinator.base_url}/api/camera/snapshot"
-            
-            _LOGGER.debug(
-                "Making camera snapshot request to %s with username %s",
-                url,
-                self.coordinator.username or DEFAULT_USERNAME,
-            )
+            url = f"http://{self.coordinator.host}/api/camera/snapshot"
             
             async with websession.get(
                 url,
@@ -129,10 +108,7 @@ class TwoNCamera(Camera):
     @property
     def extra_state_attributes(self):
         """Return the camera state attributes."""
-        username = self.coordinator.username or DEFAULT_USERNAME
-        password = self.coordinator.password or DEFAULT_PASSWORD
-        
         return {
-            "rtsp_url": f"rtsp://{username}:{password}@{self.coordinator.host}:554/h264_stream",
-            "snapshot_url": f"http://{username}:{password}@{self.coordinator.host}/api/camera/snapshot",
+            "rtsp_url": f"rtsp://{self.coordinator.host}:554/h264_stream",
+            "snapshot_url": f"http://{self.coordinator.host}/api/camera/snapshot",
         }

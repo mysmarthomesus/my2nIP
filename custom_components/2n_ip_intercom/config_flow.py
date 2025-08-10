@@ -40,21 +40,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             try:
-                config_data = {
-                    CONF_HOST: user_input[CONF_HOST],
-                    CONF_PORT: user_input.get(CONF_PORT, DEFAULT_PORT),
-                    CONF_USERNAME: user_input.get(CONF_USERNAME, DEFAULT_USERNAME),
-                    CONF_PASSWORD: user_input.get(CONF_PASSWORD, DEFAULT_PASSWORD),
-                }
-
-                _LOGGER.debug(
-                    "Creating coordinator with config: %s",
-                    {**config_data, CONF_PASSWORD: "***"},
-                )
-
                 coordinator = TwoNIntercomDataUpdateCoordinator(
                     self.hass,
-                    config_data,
+                    {
+                        CONF_HOST: user_input[CONF_HOST],
+                        CONF_PORT: user_input.get(CONF_PORT, DEFAULT_PORT),
+                        CONF_USERNAME: user_input.get(CONF_USERNAME, DEFAULT_USERNAME),
+                        CONF_PASSWORD: user_input.get(CONF_PASSWORD, DEFAULT_PASSWORD),
+                    },
                 )
                 await coordinator.async_validate_input()
 
