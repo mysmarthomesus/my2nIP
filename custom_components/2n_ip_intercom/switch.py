@@ -78,13 +78,22 @@ class TwoNIntercomDoorSwitch(CoordinatorEntity, SwitchEntity):
         # This will make the entity appear as "2N IP Intercom Door"
         self._attr_name = "Door"
         self._attr_unique_id = f"{coordinator.host}_door"
+        
+        # Device info
         self._attr_device_info = {
             "identifiers": {(DOMAIN, coordinator.host)},
-            "name": coordinator.device_info.get("model", "2N IP Intercom"),
+            "name": "2N IP Intercom",
             "manufacturer": "2N",
-            "model": coordinator.device_info.get("model", "IP Intercom"),
-            "sw_version": coordinator.device_info.get("firmwareVersion", "Unknown"),
+            "model": "IP Intercom"
         }
+        
+        # Update with device info if available
+        if coordinator.device_info:
+            self._attr_device_info.update({
+                "name": coordinator.device_info.get("model", "2N IP Intercom"),
+                "model": coordinator.device_info.get("model", "IP Intercom"),
+                "sw_version": coordinator.device_info.get("firmwareVersion"),
+            })
 
     @property
     def is_on(self) -> bool:
@@ -142,13 +151,22 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
         # This will make the entity appear as "2N IP Intercom Switch 1", "2N IP Intercom Switch 2", etc.
         self._attr_name = f"Switch {switch_id}"
         self._attr_unique_id = f"{coordinator.host}_switch_{switch_id}"
+        
+        # Device info
         self._attr_device_info = {
             "identifiers": {(DOMAIN, coordinator.host)},
-            "name": coordinator.device_info.get("model", "2N IP Intercom"),
+            "name": "2N IP Intercom",
             "manufacturer": "2N",
-            "model": coordinator.device_info.get("model", "IP Intercom"),
-            "sw_version": coordinator.device_info.get("firmwareVersion", "Unknown"),
+            "model": "IP Intercom"
         }
+        
+        # Update with device info if available
+        if coordinator.device_info:
+            self._attr_device_info.update({
+                "name": coordinator.device_info.get("model", "2N IP Intercom"),
+                "model": coordinator.device_info.get("model", "IP Intercom"),
+                "sw_version": coordinator.device_info.get("firmwareVersion"),
+            })
 
     @property
     def is_on(self) -> bool:

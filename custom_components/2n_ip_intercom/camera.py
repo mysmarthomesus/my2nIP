@@ -47,14 +47,21 @@ class TwoNCamera(Camera):
         self._last_image = None
         self._attr_supported_features = CameraEntityFeature.STREAM
         
-        # Enhanced device info
+        # Device info
         self._attr_device_info = {
             "identifiers": {(DOMAIN, coordinator.host)},
-            "name": coordinator.device_info.get("model", "2N IP Intercom"),
+            "name": "2N IP Intercom",
             "manufacturer": "2N",
-            "model": coordinator.device_info.get("model", "IP Intercom"),
-            "sw_version": coordinator.device_info.get("firmwareVersion", "Unknown"),
+            "model": "IP Intercom"
         }
+        
+        # Update with device info if available
+        if coordinator.device_info:
+            self._attr_device_info.update({
+                "name": coordinator.device_info.get("model", "2N IP Intercom"),
+                "model": coordinator.device_info.get("model", "IP Intercom"),
+                "sw_version": coordinator.device_info.get("firmwareVersion"),
+            })
 
     async def stream_source(self) -> str | None:
         """Return the RTSP stream source."""

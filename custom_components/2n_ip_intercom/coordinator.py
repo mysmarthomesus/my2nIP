@@ -35,6 +35,8 @@ class TwoNIntercomDataUpdateCoordinator(DataUpdateCoordinator):
         self.password = config.get(CONF_PASSWORD)
         self.base_url = f"http://{self.host}:{self.port}"
         self._session = None
+        self.device_info = None
+        self.mac_address = None
 
         super().__init__(
             hass,
@@ -42,11 +44,66 @@ class TwoNIntercomDataUpdateCoordinator(DataUpdateCoordinator):
             name=DOMAIN,
             update_interval=timedelta(seconds=30),
         )
+        
+        # Initialize device info
+        self._init_device_info()
+
+    def _init_device_info(self):
+        """Initialize device info."""
+        if not self.device_info:
+            self.device_info = {
+                "model": "2N IP Intercom",
+                "manufacturer": "2N",
+                "firmwareVersion": "Unknown"
+            }
 
     async def async_shutdown(self) -> None:
         """Shutdown the coordinator."""
         if self._session and not self._session.closed:
             await self._session.close()
+            
+    async def _async_update_data(self) -> dict:
+        """Update data via library."""
+        try:
+            if not self._session:
+                self._session = aiohttp.ClientSession()
+
+            auth = None
+            if self.username and self.password:
+                auth = aiohttp.BasicAuth(self.username, self.password)
+
+            async with self._session.get(
+                f"{self.base_url}{API_SYSTEM_STATUS}",
+                auth=auth,
+                ssl=False,
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    # Update device info
+                    if not self.device_info:
+                        self.device_info = {}
+                    
+                    self.device_info.update({
+                        "model": data.get("model", "2N IP Intercom"),
+                        "manufacturer": "2N",
+                        "firmwareVersion": data.get("firmwareVersion", "Unknown"),
+                        "serialNumber": data.get("serialNumber"),
+                        "macAddress": data.get("macAddress"),
+                    })
+                    
+                    if data.get("macAddress"):
+                        self.mac_address = data["macAddress"].replace(":", "")
+                    
+                    return data
+                    
+                raise UpdateFailed(f"Error communicating with API: {response.status}")
+                
+        except asyncio.TimeoutError as exception:
+            raise UpdateFailed("Timeout communicating with API") from exception
+            
+        except Exception as exception:
+            raise UpdateFailed(f"Error communicating with API: {exception}") from exception
 
     async def _async_update_data(self):
         """Update data via API."""

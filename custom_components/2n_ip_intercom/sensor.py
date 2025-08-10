@@ -94,14 +94,21 @@ class TwoNIntercomSensor(CoordinatorEntity, SensorEntity):
         self.entity_description = description
         self._attr_unique_id = f"{coordinator.host}_{description.key}"
         
-        # Enhanced device info
+        # Device info
         self._attr_device_info = {
             "identifiers": {(DOMAIN, coordinator.host)},
-            "name": coordinator.device_info.get("model", "2N IP Intercom"),
+            "name": "2N IP Intercom",
             "manufacturer": "2N",
-            "model": coordinator.device_info.get("model", "IP Intercom"),
-            "sw_version": coordinator.device_info.get("firmwareVersion", "Unknown"),
+            "model": "IP Intercom"
         }
+        
+        # Update with device info if available
+        if coordinator.device_info:
+            self._attr_device_info.update({
+                "name": coordinator.device_info.get("model", "2N IP Intercom"),
+                "model": coordinator.device_info.get("model", "IP Intercom"),
+                "sw_version": coordinator.device_info.get("firmwareVersion"),
+            })
         self.entity_description = description
         self._attr_unique_id = f"{coordinator.host}_{description.key}"
         self._attr_device_info = {
