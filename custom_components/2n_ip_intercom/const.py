@@ -3,7 +3,7 @@ DOMAIN = "2n_ip_intercom"
 
 DEFAULT_PORT = 80
 DEFAULT_USERNAME = "admin"
-DEFAULT_PASSWORD = "2n"
+DEFAULT_PASSWORD = "Ka"
 
 # API endpoints
 API_SYSTEM_STATUS = "/api/system/info"

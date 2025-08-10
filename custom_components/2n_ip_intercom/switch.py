@@ -45,6 +45,12 @@ async def async_setup_entry(
                 password=coordinator.password,
             )
 
+            _LOGGER.debug(
+                "Making switch status request to %s with username %s",
+                f"{coordinator.base_url}{API_SWITCH_STATUS}",
+                coordinator.username,
+            )
+
             async with session.get(
                 f"{coordinator.base_url}{API_SWITCH_STATUS}",
                 auth=auth,

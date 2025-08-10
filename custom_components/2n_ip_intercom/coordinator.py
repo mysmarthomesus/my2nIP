@@ -20,6 +20,8 @@ from homeassistant.const import (
 from .const import (
     DOMAIN,
     API_SYSTEM_STATUS,
+    DEFAULT_USERNAME,
+    DEFAULT_PASSWORD,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -31,12 +33,20 @@ class TwoNIntercomDataUpdateCoordinator(DataUpdateCoordinator):
         """Initialize."""
         self.host = config[CONF_HOST]
         self.port = config.get(CONF_PORT, 80)
-        self.username = config.get(CONF_USERNAME, "admin")
-        self.password = config.get(CONF_PASSWORD, "2n")
+        self.username = config.get(CONF_USERNAME, DEFAULT_USERNAME)
+        self.password = config.get(CONF_PASSWORD, DEFAULT_PASSWORD)
         self.base_url = f"http://{self.host}:{self.port}"
         self._session = None
         self.device_info = None
         self.mac_address = None
+
+        # Debug log credentials being used
+        _LOGGER.debug(
+            "Initializing coordinator with host=%s, port=%s, username=%s",
+            self.host,
+            self.port,
+            self.username,
+        )
 
         super().__init__(
             hass,
@@ -70,7 +80,14 @@ class TwoNIntercomDataUpdateCoordinator(DataUpdateCoordinator):
 
             auth = aiohttp.BasicAuth(
                 login=self.username,
-                password=self.password
+                password=self.password,
+            )
+
+            # Debug log the request
+            _LOGGER.debug(
+                "Making request to %s with username %s",
+                f"{self.base_url}{API_SYSTEM_STATUS}",
+                self.username,
             )
 
             async with self._session.get(

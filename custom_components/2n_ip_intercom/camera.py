@@ -86,6 +86,12 @@ class TwoNCamera(Camera):
             # 2N uses this endpoint for snapshots
             url = f"{self.coordinator.base_url}/api/camera/snapshot"
             
+            _LOGGER.debug(
+                "Making camera snapshot request to %s with username %s",
+                url,
+                self.coordinator.username,
+            )
+            
             async with websession.get(
                 url,
                 auth=auth,
