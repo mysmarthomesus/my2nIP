@@ -30,6 +30,12 @@ async def async_setup_entry(
     """Set up 2N IP Intercom switches based on a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
 
+    _LOGGER.debug(
+        "Setting up switches with coordinator: username=%s, host=%s",
+        coordinator.username,
+        coordinator.host,
+    )
+
     # Create a list of switch entities
     switches = []
     
@@ -39,30 +45,30 @@ async def async_setup_entry(
     # Add regular switches (most 2N devices support up to 4 switches)
     try:
         # Query available switches
+        url = f"{coordinator.base_url}{API_SWITCH_STATUS}"
+        _LOGGER.debug("Detecting switches at URL: %s", url)
+        
         async with aiohttp.ClientSession() as session:
             auth = aiohttp.BasicAuth(
                 login=coordinator.username,
                 password=coordinator.password,
             )
 
-            _LOGGER.debug(
-                "Making switch status request to %s with username %s",
-                f"{coordinator.base_url}{API_SWITCH_STATUS}",
-                coordinator.username,
-            )
-
-            async with session.get(
-                f"{coordinator.base_url}{API_SWITCH_STATUS}",
-                auth=auth,
-                ssl=False,
-                timeout=10,
-            ) as response:
+            async with session.get(url, auth=auth, ssl=False, timeout=10) as response:
+                _LOGGER.debug("Switch detection response status: %s", response.status)
+                
                 if response.status == 200:
                     data = await response.json()
+                    _LOGGER.debug("Switch detection response data: %s", data)
+                    
                     # Check for switches 1-4
                     for switch_id in range(1, 5):
-                        if f"switch{switch_id}" in str(data):
+                        switch_key = f"switch{switch_id}"
+                        if switch_key in str(data):
+                            _LOGGER.debug("Found switch: %s", switch_key)
                             switches.append(TwoNIntercomSwitch(coordinator, switch_id))
+                elif response.status == 401:
+                    _LOGGER.error("Authentication failed for switch detection. Check credentials.")
                 else:
                     _LOGGER.error("Failed to get switch status: %s", response.status)
 
@@ -109,33 +115,51 @@ class TwoNIntercomDoorSwitch(CoordinatorEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs) -> None:
         """Unlock the door."""
-        async with aiohttp.ClientSession() as session:
-            auth = aiohttp.BasicAuth(
-                login=self.coordinator.username,
-                password=self.coordinator.password,
-            )
+        try:
+            async with aiohttp.ClientSession() as session:
+                auth = aiohttp.BasicAuth(
+                    self.coordinator.username or DEFAULT_USERNAME,
+                    self.coordinator.password or DEFAULT_PASSWORD,
+                )
 
-            await session.get(
-                f"{self.coordinator.base_url}{API_DOOR_CONTROL}",
-                params={"switch": "1", "action": "on"},
-                auth=auth,
-            )
-        await self.coordinator.async_request_refresh()
+                async with session.get(
+                    f"{self.coordinator.base_url}{API_DOOR_CONTROL}",
+                    params={"switch": "1", "action": "on"},
+                    auth=auth,
+                    ssl=False,
+                    timeout=10,
+                ) as response:
+                    if response.status == 401:
+                        _LOGGER.error("Authentication failed when unlocking door. Check credentials.")
+                    elif response.status != 200:
+                        _LOGGER.error("Failed to unlock door: %s", response.status)
+            await self.coordinator.async_request_refresh()
+        except Exception as err:
+            _LOGGER.error("Error unlocking door: %s", err)
 
     async def async_turn_off(self, **kwargs) -> None:
         """Lock the door."""
-        async with aiohttp.ClientSession() as session:
-            auth = aiohttp.BasicAuth(
-                login=self.coordinator.username,
-                password=self.coordinator.password,
-            )
+        try:
+            async with aiohttp.ClientSession() as session:
+                auth = aiohttp.BasicAuth(
+                    self.coordinator.username or DEFAULT_USERNAME,
+                    self.coordinator.password or DEFAULT_PASSWORD,
+                )
 
-            await session.get(
-                f"{self.coordinator.base_url}{API_DOOR_CONTROL}",
-                params={"switch": "1", "action": "off"},
-                auth=auth,
-            )
-        await self.coordinator.async_request_refresh()
+                async with session.get(
+                    f"{self.coordinator.base_url}{API_DOOR_CONTROL}",
+                    params={"switch": "1", "action": "off"},
+                    auth=auth,
+                    ssl=False,
+                    timeout=10,
+                ) as response:
+                    if response.status == 401:
+                        _LOGGER.error("Authentication failed when locking door. Check credentials.")
+                    elif response.status != 200:
+                        _LOGGER.error("Failed to lock door: %s", response.status)
+            await self.coordinator.async_request_refresh()
+        except Exception as err:
+            _LOGGER.error("Error locking door: %s", err)
 
 
 class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
@@ -185,26 +209,36 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
                     self.coordinator.password or DEFAULT_PASSWORD,
                 )
                 
-                await session.get(
+                async with session.get(
                     f"{self.coordinator.base_url}{API_SWITCH_CONTROL}",
                     params={"switch": str(self._switch_id), "action": "on"},
                     auth=auth,
                     ssl=False,
-                )
+                    timeout=10,
+                ) as response:
+                    if response.status == 401:
+                        _LOGGER.error("Authentication failed when turning on switch %s. Check credentials.", self._switch_id)
+                        return
+                    elif response.status != 200:
+                        _LOGGER.error("Failed to turn on switch %s: %s", self._switch_id, response.status)
+                        return
                 
                 # Verify the switch state
                 async with session.get(
                     f"{self.coordinator.base_url}{API_SWITCH_STATUS}",
                     auth=auth,
                     ssl=False,
+                    timeout=10,
                 ) as response:
                     if response.status == 200:
                         data = await response.json()
-                        if f"switch{self._switch_id}" in data:
-                            self._state = data[f"switch{self._switch_id}"]["state"] == "on"
-                            self.async_write_ha_state()
-                            
-            await self.coordinator.async_request_refresh()
+                        if f"switch{self._switch_id}" in str(data):  # Use str(data) to handle nested structure
+                            # Update state through the coordinator to ensure consistency
+                            await self.coordinator.async_request_refresh()
+                    elif response.status == 401:
+                        _LOGGER.error("Authentication failed when verifying switch state. Check credentials.")
+                    else:
+                        _LOGGER.error("Failed to verify switch state: %s", response.status)
         except Exception as err:
             _LOGGER.error("Error turning on switch %s: %s", self._switch_id, err)
 
@@ -217,25 +251,35 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
                     self.coordinator.password or DEFAULT_PASSWORD,
                 )
                 
-                await session.get(
+                async with session.get(
                     f"{self.coordinator.base_url}{API_SWITCH_CONTROL}",
                     params={"switch": str(self._switch_id), "action": "off"},
                     auth=auth,
                     ssl=False,
-                )
+                    timeout=10,
+                ) as response:
+                    if response.status == 401:
+                        _LOGGER.error("Authentication failed when turning off switch %s. Check credentials.", self._switch_id)
+                        return
+                    elif response.status != 200:
+                        _LOGGER.error("Failed to turn off switch %s: %s", self._switch_id, response.status)
+                        return
                 
                 # Verify the switch state
                 async with session.get(
                     f"{self.coordinator.base_url}{API_SWITCH_STATUS}",
                     auth=auth,
                     ssl=False,
+                    timeout=10,
                 ) as response:
                     if response.status == 200:
                         data = await response.json()
-                        if f"switch{self._switch_id}" in data:
-                            self._state = data[f"switch{self._switch_id}"]["state"] == "on"
-                            self.async_write_ha_state()
-                            
-            await self.coordinator.async_request_refresh()
+                        if f"switch{self._switch_id}" in str(data):  # Use str(data) to handle nested structure
+                            # Update state through the coordinator to ensure consistency
+                            await self.coordinator.async_request_refresh()
+                    elif response.status == 401:
+                        _LOGGER.error("Authentication failed when verifying switch state. Check credentials.")
+                    else:
+                        _LOGGER.error("Failed to verify switch state: %s", response.status)
         except Exception as err:
             _LOGGER.error("Error turning off switch %s: %s", self._switch_id, err)
