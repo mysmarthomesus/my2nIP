@@ -13,7 +13,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    DEFAULT_USERNAME,
+    DEFAULT_PASSWORD,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -65,9 +69,9 @@ class TwoNCamera(Camera):
 
     async def stream_source(self) -> str | None:
         """Return the RTSP stream source."""
-        auth_string = ""
-        if self.coordinator.username and self.coordinator.password:
-            auth_string = f"{self.coordinator.username}:{self.coordinator.password}@"
+        username = self.coordinator.username or DEFAULT_USERNAME
+        password = self.coordinator.password or DEFAULT_PASSWORD
+        auth_string = f"{username}:{password}@"
             
         # 2N devices use port 554 for RTSP by default
         return f"rtsp://{auth_string}{self.coordinator.host}:554/h264_stream"
@@ -79,8 +83,8 @@ class TwoNCamera(Camera):
         try:
             websession = async_get_clientsession(self.hass)
             auth = aiohttp.BasicAuth(
-                login=self.coordinator.username,
-                password=self.coordinator.password,
+                login=self.coordinator.username or DEFAULT_USERNAME,
+                password=self.coordinator.password or DEFAULT_PASSWORD,
             )
 
             # 2N uses this endpoint for snapshots
@@ -89,7 +93,7 @@ class TwoNCamera(Camera):
             _LOGGER.debug(
                 "Making camera snapshot request to %s with username %s",
                 url,
-                self.coordinator.username,
+                self.coordinator.username or DEFAULT_USERNAME,
             )
             
             async with websession.get(
@@ -125,7 +129,10 @@ class TwoNCamera(Camera):
     @property
     def extra_state_attributes(self):
         """Return the camera state attributes."""
+        username = self.coordinator.username or DEFAULT_USERNAME
+        password = self.coordinator.password or DEFAULT_PASSWORD
+        
         return {
-            "rtsp_url": f"rtsp://{self.coordinator.host}:554/h264_stream",
-            "snapshot_url": f"http://{self.coordinator.host}/api/camera/snapshot",
+            "rtsp_url": f"rtsp://{username}:{password}@{self.coordinator.host}:554/h264_stream",
+            "snapshot_url": f"http://{username}:{password}@{self.coordinator.host}/api/camera/snapshot",
         }
