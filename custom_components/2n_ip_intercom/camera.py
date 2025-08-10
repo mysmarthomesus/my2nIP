@@ -78,12 +78,13 @@ class TwoNCamera(Camera):
         """Return a still image from the camera."""
         try:
             websession = async_get_clientsession(self.hass)
-            auth = None
-            if self.coordinator.username and self.coordinator.password:
-                auth = aiohttp.BasicAuth(self.coordinator.username, self.coordinator.password)
+            auth = aiohttp.BasicAuth(
+                login=self.coordinator.username,
+                password=self.coordinator.password,
+            )
 
             # 2N uses this endpoint for snapshots
-            url = f"http://{self.coordinator.host}/api/camera/snapshot"
+            url = f"{self.coordinator.base_url}/api/camera/snapshot"
             
             async with websession.get(
                 url,

@@ -31,8 +31,8 @@ class TwoNIntercomDataUpdateCoordinator(DataUpdateCoordinator):
         """Initialize."""
         self.host = config[CONF_HOST]
         self.port = config.get(CONF_PORT, 80)
-        self.username = config.get(CONF_USERNAME)
-        self.password = config.get(CONF_PASSWORD)
+        self.username = config.get(CONF_USERNAME, "admin")
+        self.password = config.get(CONF_PASSWORD, "2n")
         self.base_url = f"http://{self.host}:{self.port}"
         self._session = None
         self.device_info = None
@@ -68,14 +68,16 @@ class TwoNIntercomDataUpdateCoordinator(DataUpdateCoordinator):
             if not self._session:
                 self._session = aiohttp.ClientSession()
 
-            auth = None
-            if self.username and self.password:
-                auth = aiohttp.BasicAuth(self.username, self.password)
+            auth = aiohttp.BasicAuth(
+                login=self.username,
+                password=self.password
+            )
 
             async with self._session.get(
                 f"{self.base_url}{API_SYSTEM_STATUS}",
                 auth=auth,
                 ssl=False,
+                timeout=10,
             ) as response:
                 if response.status == 200:
                     data = await response.json()

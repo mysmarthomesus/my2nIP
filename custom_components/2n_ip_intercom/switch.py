@@ -41,14 +41,15 @@ async def async_setup_entry(
         # Query available switches
         async with aiohttp.ClientSession() as session:
             auth = aiohttp.BasicAuth(
-                coordinator.username or DEFAULT_USERNAME,
-                coordinator.password or DEFAULT_PASSWORD,
+                login=coordinator.username,
+                password=coordinator.password,
             )
 
             async with session.get(
                 f"{coordinator.base_url}{API_SWITCH_STATUS}",
                 auth=auth,
                 ssl=False,
+                timeout=10,
             ) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -103,12 +104,10 @@ class TwoNIntercomDoorSwitch(CoordinatorEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs) -> None:
         """Unlock the door."""
         async with aiohttp.ClientSession() as session:
-            auth = None
-            if self.coordinator.username and self.coordinator.password:
-                auth = aiohttp.BasicAuth(
-                    self.coordinator.username,
-                    self.coordinator.password,
-                )
+            auth = aiohttp.BasicAuth(
+                login=self.coordinator.username,
+                password=self.coordinator.password,
+            )
 
             await session.get(
                 f"{self.coordinator.base_url}{API_DOOR_CONTROL}",
@@ -120,12 +119,10 @@ class TwoNIntercomDoorSwitch(CoordinatorEntity, SwitchEntity):
     async def async_turn_off(self, **kwargs) -> None:
         """Lock the door."""
         async with aiohttp.ClientSession() as session:
-            auth = None
-            if self.coordinator.username and self.coordinator.password:
-                auth = aiohttp.BasicAuth(
-                    self.coordinator.username,
-                    self.coordinator.password,
-                )
+            auth = aiohttp.BasicAuth(
+                login=self.coordinator.username,
+                password=self.coordinator.password,
+            )
 
             await session.get(
                 f"{self.coordinator.base_url}{API_DOOR_CONTROL}",
