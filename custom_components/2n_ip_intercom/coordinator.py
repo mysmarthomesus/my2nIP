@@ -75,106 +75,65 @@ class TwoNIntercomDataUpdateCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> dict:
         """Update data via library."""
         try:
-            if not self._session:
-                self._session = aiohttp.ClientSession()
-
             auth = aiohttp.BasicAuth(
-                login=self.username,
-                password=self.password,
+                login=self.username or DEFAULT_USERNAME,
+                password=self.password or DEFAULT_PASSWORD,
             )
-
-            # Debug log the request
-            _LOGGER.debug(
-                "Making request to %s with username %s",
-                f"{self.base_url}{API_SYSTEM_STATUS}",
-                self.username,
-            )
-
-            async with self._session.get(
-                f"{self.base_url}{API_SYSTEM_STATUS}",
-                auth=auth,
-                ssl=False,
-                timeout=10,
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    # Update device info
-                    if not self.device_info:
-                        self.device_info = {}
-                    
-                    self.device_info.update({
-                        "model": data.get("model", "2N IP Intercom"),
-                        "manufacturer": "2N",
-                        "firmwareVersion": data.get("firmwareVersion", "Unknown"),
-                        "serialNumber": data.get("serialNumber"),
-                        "macAddress": data.get("macAddress"),
-                    })
-                    
-                    if data.get("macAddress"):
-                        self.mac_address = data["macAddress"].replace(":", "")
-                    
-                    return data
-                    
-                raise UpdateFailed(f"Error communicating with API: {response.status}")
-                
-        except asyncio.TimeoutError as exception:
-            raise UpdateFailed("Timeout communicating with API") from exception
-            
-        except Exception as exception:
-            raise UpdateFailed(f"Error communicating with API: {exception}") from exception
-
-    async def _async_update_data(self):
-        """Update data via API."""
-        try:
-            auth = None
-            if self.username and self.password:
-                auth = aiohttp.BasicAuth(self.username, self.password)
             
             headers = {
                 "Accept": "application/json",
                 "Connection": "keep-alive"
             }
 
-            _LOGGER.debug("Attempting to connect to %s:%s", self.host, self.port)
+            _LOGGER.debug(
+                "Making request to %s with username %s",
+                f"{self.base_url}{API_SYSTEM_STATUS}",
+                self.username or DEFAULT_USERNAME,
+            )
 
-            try:
-                async with aiohttp.ClientSession() as session:
-                    url = f"{self.base_url}{API_SYSTEM_STATUS}"
-                    _LOGGER.debug("Requesting URL: %s", url)
+            async with aiohttp.ClientSession() as session:
+                url = f"{self.base_url}{API_SYSTEM_STATUS}"
+                _LOGGER.debug("Requesting URL: %s", url)
+                
+                async with session.get(
+                    url,
+                    auth=auth,
+                    headers=headers,
+                    ssl=False,
+                    timeout=10,
+                ) as response:
+                    _LOGGER.debug("Response status: %s", response.status)
                     
-                    async with session.get(
-                        url,
-                        auth=auth,
-                        headers=headers,
-                        timeout=10,
-                        ssl=False  # Most 2N devices use HTTP
-                    ) as resp:
-                        _LOGGER.debug("Response status: %s", resp.status)
+                    if response.status == 401:
+                        raise UpdateFailed(f"Authentication failed. Please check username ({self.username or DEFAULT_USERNAME}) and password")
                         
-                        if resp.status == 401:
-                            raise UpdateFailed("Invalid authentication credentials")
-                        if resp.status != 200:
-                            content = await resp.text()
-                            _LOGGER.debug("Error response content: %s", content)
-                            raise UpdateFailed(
-                                f"Error communicating with API: Status {resp.status}"
-                            )
+                    if response.status != 200:
+                        content = await response.text()
+                        _LOGGER.debug("Error response content: %s", content)
+                        raise UpdateFailed(f"Error communicating with API: {response.status}")
+
+                    try:
+                        data = await response.json()
+                        _LOGGER.debug("Parsed JSON data: %s", data)
                         
-                        content = await resp.text()
-                        _LOGGER.debug("Response content: %s", content)
+                        # Update device info
+                        if not self.device_info:
+                            self.device_info = {}
                         
-                        try:
-                            data = await resp.json()
-                            _LOGGER.debug("Parsed JSON data: %s", data)
-                            return data
-                        except ValueError as err:
-                            raise UpdateFailed(f"Invalid JSON response from API: {err}") from err
-                            
-            except aiohttp.ClientConnectorError as err:
-                raise UpdateFailed(f"Connection failed to {self.host}:{self.port} - {err}") from err
-            except asyncio.TimeoutError:
-                raise UpdateFailed(f"Timeout connecting to {self.host}:{self.port}") from None
+                        self.device_info.update({
+                            "model": data.get("model", "2N IP Intercom"),
+                            "manufacturer": "2N",
+                            "firmwareVersion": data.get("firmwareVersion", "Unknown"),
+                            "serialNumber": data.get("serialNumber"),
+                            "macAddress": data.get("macAddress"),
+                        })
+                        
+                        if data.get("macAddress"):
+                            self.mac_address = data["macAddress"].replace(":", "")
+                        
+                        return data
+                    except ValueError as err:
+                        raise UpdateFailed(f"Invalid JSON response from API: {err}") from err
 
         except aiohttp.ClientConnectorError as err:
             raise UpdateFailed(f"Cannot connect to {self.host}:{self.port} - {err}") from err
@@ -186,16 +145,30 @@ class TwoNIntercomDataUpdateCoordinator(DataUpdateCoordinator):
     async def async_validate_input(self) -> bool:
         """Validate the user input allows us to connect."""
         try:
-            async with aiohttp.ClientSession() as session:
-                auth = None
-                if self.username and self.password:
-                    auth = aiohttp.BasicAuth(self.username, self.password)
+            auth = aiohttp.BasicAuth(
+                login=self.username or DEFAULT_USERNAME,
+                password=self.password or DEFAULT_PASSWORD,
+            )
 
+            async with aiohttp.ClientSession() as session:
                 async with session.get(
                     f"{self.base_url}{API_SYSTEM_STATUS}",
                     auth=auth,
-                ) as resp:
-                    return resp.status == 200
+                    ssl=False,
+                    timeout=10,
+                ) as response:
+                    if response.status == 401:
+                        _LOGGER.error(
+                            "Authentication failed during validation with username: %s",
+                            self.username or DEFAULT_USERNAME,
+                        )
+                        return False
+                        
+                    return response.status == 200
 
-        except aiohttp.ClientError:
+        except aiohttp.ClientError as err:
+            _LOGGER.error("Error validating connection: %s", err)
+            return False
+        except asyncio.TimeoutError:
+            _LOGGER.error("Timeout validating connection to %s:%s", self.host, self.port)
             return False
