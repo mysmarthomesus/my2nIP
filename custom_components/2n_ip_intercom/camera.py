@@ -34,23 +34,26 @@ async def async_setup_entry(
 class TwoNCamera(Camera):
     """Implementation of a 2N IP Intercom camera."""
 
+    _attr_has_entity_name = True
+
     def __init__(self, coordinator, camera_id):
         """Initialize the camera."""
         super().__init__()
         self.coordinator = coordinator
         self.camera_id = camera_id
-        self._attr_name = f"2N Camera {camera_id}"
+        self._attr_name = f"Camera {camera_id}"  # Will appear as "2N IP Intercom Camera 1"
         self._attr_unique_id = f"{coordinator.host}_camera_{camera_id}"
         self._stream_source = None
         self._last_image = None
         self._attr_supported_features = CameraEntityFeature.STREAM
         
-        # Device info
+        # Enhanced device info
         self._attr_device_info = {
             "identifiers": {(DOMAIN, coordinator.host)},
-            "name": "2N IP Intercom",
+            "name": coordinator.device_info.get("model", "2N IP Intercom"),
             "manufacturer": "2N",
-            "model": "IP Intercom",
+            "model": coordinator.device_info.get("model", "IP Intercom"),
+            "sw_version": coordinator.device_info.get("firmwareVersion", "Unknown"),
         }
 
     async def stream_source(self) -> str | None:

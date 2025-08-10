@@ -27,30 +27,63 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up 2N IP Intercom switch based on a config entry."""
+    """Set up 2N IP Intercom switches based on a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
 
-    switches = [
-        TwoNIntercomDoorSwitch(coordinator),
-        TwoNIntercomSwitch(coordinator, 1, "Switch 1"),
-    ]
+    # Create a list of switch entities
+    switches = []
+    
+    # Add the door switch
+    switches.append(TwoNIntercomDoorSwitch(coordinator))
+    
+    # Add regular switches (most 2N devices support up to 4 switches)
+    try:
+        # Query available switches
+        async with aiohttp.ClientSession() as session:
+            auth = aiohttp.BasicAuth(
+                coordinator.username or DEFAULT_USERNAME,
+                coordinator.password or DEFAULT_PASSWORD,
+            )
 
-    async_add_entities(switches)
+            async with session.get(
+                f"{coordinator.base_url}{API_SWITCH_STATUS}",
+                auth=auth,
+                ssl=False,
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    # Check for switches 1-4
+                    for switch_id in range(1, 5):
+                        if f"switch{switch_id}" in str(data):
+                            switches.append(TwoNIntercomSwitch(coordinator, switch_id))
+                else:
+                    _LOGGER.error("Failed to get switch status: %s", response.status)
+
+    except Exception as err:
+        _LOGGER.error("Error setting up switches: %s", err)
+        # Add at least one switch if we couldn't detect them
+        switches.append(TwoNIntercomSwitch(coordinator, 1))
+
+    async_add_entities(switches, True)
 
 
 class TwoNIntercomDoorSwitch(CoordinatorEntity, SwitchEntity):
     """Representation of a 2N IP Intercom door switch."""
 
+    _attr_has_entity_name = True
+
     def __init__(self, coordinator: TwoNIntercomDataUpdateCoordinator) -> None:
         """Initialize the switch."""
         super().__init__(coordinator)
+        # This will make the entity appear as "2N IP Intercom Door"
         self._attr_name = "Door"
         self._attr_unique_id = f"{coordinator.host}_door"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, coordinator.host)},
-            "name": "2N IP Intercom",
+            "name": coordinator.device_info.get("model", "2N IP Intercom"),
             "manufacturer": "2N",
-            "model": "IP Intercom",
+            "model": coordinator.device_info.get("model", "IP Intercom"),
+            "sw_version": coordinator.device_info.get("firmwareVersion", "Unknown"),
         }
 
     @property
@@ -96,22 +129,25 @@ class TwoNIntercomDoorSwitch(CoordinatorEntity, SwitchEntity):
 class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
     """Representation of a 2N IP Intercom switch."""
 
+    _attr_has_entity_name = True
+    
     def __init__(
         self,
         coordinator: TwoNIntercomDataUpdateCoordinator,
         switch_id: int,
-        name: str,
     ) -> None:
         """Initialize the switch."""
         super().__init__(coordinator)
         self._switch_id = switch_id
-        self._attr_name = name
+        # This will make the entity appear as "2N IP Intercom Switch 1", "2N IP Intercom Switch 2", etc.
+        self._attr_name = f"Switch {switch_id}"
         self._attr_unique_id = f"{coordinator.host}_switch_{switch_id}"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, coordinator.host)},
-            "name": "2N IP Intercom",
+            "name": coordinator.device_info.get("model", "2N IP Intercom"),
             "manufacturer": "2N",
-            "model": "IP Intercom",
+            "model": coordinator.device_info.get("model", "IP Intercom"),
+            "sw_version": coordinator.device_info.get("firmwareVersion", "Unknown"),
         }
 
     @property
