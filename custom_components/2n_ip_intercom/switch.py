@@ -1,7 +1,9 @@
 """Support for 2N IP Intercom switches."""
 from __future__ import annotations
 
+import logging
 import aiohttp
+
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -12,8 +14,13 @@ from .const import (
     DOMAIN,
     API_SWITCH_CONTROL,
     API_DOOR_CONTROL,
+    API_SWITCH_STATUS,
+    DEFAULT_USERNAME,
+    DEFAULT_PASSWORD,
 )
 from .coordinator import TwoNIntercomDataUpdateCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -114,34 +121,64 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs) -> None:
         """Turn the switch on."""
-        async with aiohttp.ClientSession() as session:
-            auth = None
-            if self.coordinator.username and self.coordinator.password:
+        try:
+            async with aiohttp.ClientSession() as session:
                 auth = aiohttp.BasicAuth(
-                    self.coordinator.username,
-                    self.coordinator.password,
+                    self.coordinator.username or DEFAULT_USERNAME,
+                    self.coordinator.password or DEFAULT_PASSWORD,
                 )
-
-            await session.get(
-                f"{self.coordinator.base_url}{API_SWITCH_CONTROL}",
-                params={"switch": str(self._switch_id), "action": "on"},
-                auth=auth,
-            )
-        await self.coordinator.async_request_refresh()
+                
+                await session.get(
+                    f"{self.coordinator.base_url}{API_SWITCH_CONTROL}",
+                    params={"switch": str(self._switch_id), "action": "on"},
+                    auth=auth,
+                    ssl=False,
+                )
+                
+                # Verify the switch state
+                async with session.get(
+                    f"{self.coordinator.base_url}{API_SWITCH_STATUS}",
+                    auth=auth,
+                    ssl=False,
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if f"switch{self._switch_id}" in data:
+                            self._state = data[f"switch{self._switch_id}"]["state"] == "on"
+                            self.async_write_ha_state()
+                            
+            await self.coordinator.async_request_refresh()
+        except Exception as err:
+            _LOGGER.error("Error turning on switch %s: %s", self._switch_id, err)
 
     async def async_turn_off(self, **kwargs) -> None:
         """Turn the switch off."""
-        async with aiohttp.ClientSession() as session:
-            auth = None
-            if self.coordinator.username and self.coordinator.password:
+        try:
+            async with aiohttp.ClientSession() as session:
                 auth = aiohttp.BasicAuth(
-                    self.coordinator.username,
-                    self.coordinator.password,
+                    self.coordinator.username or DEFAULT_USERNAME,
+                    self.coordinator.password or DEFAULT_PASSWORD,
                 )
-
-            await session.get(
-                f"{self.coordinator.base_url}{API_SWITCH_CONTROL}",
-                params={"switch": str(self._switch_id), "action": "off"},
-                auth=auth,
-            )
-        await self.coordinator.async_request_refresh()
+                
+                await session.get(
+                    f"{self.coordinator.base_url}{API_SWITCH_CONTROL}",
+                    params={"switch": str(self._switch_id), "action": "off"},
+                    auth=auth,
+                    ssl=False,
+                )
+                
+                # Verify the switch state
+                async with session.get(
+                    f"{self.coordinator.base_url}{API_SWITCH_STATUS}",
+                    auth=auth,
+                    ssl=False,
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if f"switch{self._switch_id}" in data:
+                            self._state = data[f"switch{self._switch_id}"]["state"] == "on"
+                            self.async_write_ha_state()
+                            
+            await self.coordinator.async_request_refresh()
+        except Exception as err:
+            _LOGGER.error("Error turning off switch %s: %s", self._switch_id, err)
