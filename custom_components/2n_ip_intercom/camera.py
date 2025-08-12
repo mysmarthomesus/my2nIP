@@ -39,7 +39,7 @@ class TwoNCamera(Camera):
         super().__init__()
         self.coordinator = coordinator
         self.camera_id = camera_id
-        self._attr_name = f"2N Camera {camera_id}"
+        self._attr_name = f"{coordinator.device_name} Camera {camera_id}"
         self._attr_unique_id = f"{coordinator.host}_camera_{camera_id}"
         self._stream_source = None
         self._last_image = None
@@ -48,7 +48,7 @@ class TwoNCamera(Camera):
         # Device info
         self._attr_device_info = {
             "identifiers": {(DOMAIN, coordinator.host)},
-            "name": "2N IP Intercom",
+            "name": coordinator.device_name,
             "manufacturer": "2N",
             "model": "IP Intercom",
         }

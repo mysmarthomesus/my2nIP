@@ -5,6 +5,9 @@ DEFAULT_PORT = 80
 DEFAULT_USERNAME = "admin"
 DEFAULT_PASSWORD = "2n"
 
+# Configuration keys
+CONF_NAME = "name"
+
 # API endpoints
 API_SYSTEM_STATUS = "/api/system/info"
 API_SWITCH_CONTROL = "/api/switch/ctrl"

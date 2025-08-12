@@ -25,7 +25,7 @@ async def async_setup_entry(
 
     switches = [
         TwoNIntercomDoorSwitch(coordinator),
-        TwoNIntercomSwitch(coordinator, 1, "Switch 1"),
+        TwoNIntercomSwitch(coordinator, 1, f"{coordinator.device_name} Switch 1"),
     ]
 
     async_add_entities(switches)
@@ -37,11 +37,11 @@ class TwoNIntercomDoorSwitch(CoordinatorEntity, SwitchEntity):
     def __init__(self, coordinator: TwoNIntercomDataUpdateCoordinator) -> None:
         """Initialize the switch."""
         super().__init__(coordinator)
-        self._attr_name = "Door"
+        self._attr_name = f"{coordinator.device_name} Door"
         self._attr_unique_id = f"{coordinator.host}_door"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, coordinator.host)},
-            "name": "2N IP Intercom",
+            "name": coordinator.device_name,
             "manufacturer": "2N",
             "model": "IP Intercom",
         }
@@ -102,7 +102,7 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
         self._attr_unique_id = f"{coordinator.host}_switch_{switch_id}"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, coordinator.host)},
-            "name": "2N IP Intercom",
+            "name": coordinator.device_name,
             "manufacturer": "2N",
             "model": "IP Intercom",
         }

@@ -13,15 +13,14 @@ from homeassistant.const import (
     CONF_USERNAME,
     CONF_PASSWORD,
 )
-from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
-import homeassistant.helpers.config_validation as cv
 
 from .const import (
     DOMAIN,
     DEFAULT_PORT,
     DEFAULT_USERNAME,
     DEFAULT_PASSWORD,
+    CONF_NAME,
 )
 from .coordinator import TwoNIntercomDataUpdateCoordinator
 
@@ -52,7 +51,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await coordinator.async_validate_input()
 
                 return self.async_create_entry(
-                    title=user_input[CONF_HOST],
+                    title=user_input.get(CONF_NAME, user_input[CONF_HOST]),
                     data=user_input,
                 )
             except Exception:  # pylint: disable=broad-except
@@ -64,6 +63,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_HOST): str,
+                    vol.Optional(CONF_NAME): str,
                     vol.Optional(CONF_PORT, default=DEFAULT_PORT): int,
                     vol.Optional(CONF_USERNAME, default=DEFAULT_USERNAME): str,
                     vol.Optional(CONF_PASSWORD, default=DEFAULT_PASSWORD): str,

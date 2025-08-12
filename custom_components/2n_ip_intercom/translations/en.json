@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "2N IP Intercom",
+        "description": "Configure your 2N IP Intercom device",
+        "data": {
+          "host": "Host",
+          "name": "Device Name (optional)",
+          "port": "Port",
+          "username": "Username",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "unknown": "Unexpected error occurred"
+    }
+  }
+}

@@ -20,6 +20,7 @@ from homeassistant.const import (
 from .const import (
     DOMAIN,
     API_SYSTEM_STATUS,
+    CONF_NAME,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ class TwoNIntercomDataUpdateCoordinator(DataUpdateCoordinator):
         self.port = config.get(CONF_PORT, 80)
         self.username = config.get(CONF_USERNAME)
         self.password = config.get(CONF_PASSWORD)
+        self.device_name = config.get(CONF_NAME, f"2N IP Intercom ({self.host})")
         self.base_url = f"http://{self.host}:{self.port}"
         self._session = None
 

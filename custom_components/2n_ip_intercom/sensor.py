@@ -29,7 +29,7 @@ async def async_setup_entry(
             coordinator,
             SensorEntityDescription(
                 key="device_state",
-                name="Device State",
+                name=f"{coordinator.device_name} Device State",
                 icon="mdi:door",
             ),
         ),
@@ -52,7 +52,7 @@ class TwoNIntercomSensor(CoordinatorEntity, SensorEntity):
         self._attr_unique_id = f"{coordinator.host}_{description.key}"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, coordinator.host)},
-            "name": "2N IP Intercom",
+            "name": coordinator.device_name,
             "manufacturer": "2N",
             "model": "IP Intercom",
         }
