@@ -12,7 +12,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import (
     DOMAIN,
     API_SWITCH_CONTROL,
-    API_SWITCH_HOLD,
     API_DOOR_CONTROL,
     SWITCH_MODE_PULSE,
     SWITCH_MODE_TOGGLE,
@@ -151,29 +150,22 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
     @property
     def extra_state_attributes(self):
         """Return the switch state attributes."""
-        attributes = {
+        return {
             "switch_mode": self._switch_mode,
             "switch_id": self._switch_id,
             "global_switch_mode": self.coordinator.switch_mode,
+            "switch_state": "ON" if self.is_on else "OFF",
         }
-        
-        # Add switch hold state for toggle mode switches
-        if self._switch_mode == SWITCH_MODE_TOGGLE:
-            hold_state = self.coordinator.data.get(f"switch{self._switch_id}_hold_state", False)
-            attributes["switch_hold_enabled"] = hold_state
-            attributes["device_switch_hold"] = "ON" if hold_state else "OFF"
-            
-        return attributes
 
     @property
     def is_on(self) -> bool:
         """Return true if switch is on."""
         if self._switch_mode == SWITCH_MODE_TOGGLE:
-            # In toggle mode, check the device's switch hold state
-            return self.coordinator.data.get(f"switch{self._switch_id}_hold_state", False)
+            # In toggle mode, track the state locally
+            return self.coordinator.data.get(f"switch{self._switch_id}_state", False)
         else:
-            # In pulse mode, check coordinator data (traditional behavior)
-            return self.coordinator.data.get(f"switch{self._switch_id}State") == "on"
+            # In pulse mode, always return False (momentary activation)
+            return False
 
     async def async_turn_on(self, **kwargs) -> None:
         """Turn the switch on."""
@@ -186,43 +178,37 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
                     self.coordinator.password,
                 )
 
-            if self._switch_mode == SWITCH_MODE_TOGGLE:
-                # For toggle mode, enable switch hold on the device
-                _LOGGER.info("Enabling switch hold for switch %s", self._switch_id)
-                async with session.get(
-                    f"{self.coordinator.base_url}{API_SWITCH_HOLD}",
-                    params={"switch": str(self._switch_id), "action": "on"},
-                    auth=auth,
-                    ssl=False,
-                    raise_for_status=False
-                ) as resp:
-                    if resp.status != 200:
-                        _LOGGER.error("Failed to enable switch hold for switch %s: HTTP %s", self._switch_id, resp.status)
-                    else:
-                        # Update coordinator data to reflect hold state
-                        self.coordinator.data[f"switch{self._switch_id}_hold_state"] = True
-            else:
-                # For pulse mode, send normal switch activation
-                async with session.get(
-                    f"{self.coordinator.base_url}{API_SWITCH_CONTROL}",
-                    params={"switch": str(self._switch_id), "action": "on"},
-                    auth=auth,
-                    ssl=False,
-                    raise_for_status=False
-                ) as resp:
-                    if resp.status != 200:
-                        _LOGGER.error("Failed to turn on switch %s: HTTP %s", self._switch_id, resp.status)
+            # Send switch on command for both modes
+            _LOGGER.info("Turning on switch %s (mode: %s)", self._switch_id, self._switch_mode)
+            async with session.get(
+                f"{self.coordinator.base_url}{API_SWITCH_CONTROL}",
+                params={"switch": str(self._switch_id), "action": "on"},
+                auth=auth,
+                ssl=False,
+                raise_for_status=False
+            ) as resp:
+                if resp.status != 200:
+                    _LOGGER.error("Failed to turn on switch %s: HTTP %s", self._switch_id, resp.status)
+                    content = await resp.text()
+                    _LOGGER.error("Response content: %s", content)
+                else:
+                    _LOGGER.info("Successfully turned on switch %s", self._switch_id)
+                    # Update local state for toggle mode
+                    if self._switch_mode == SWITCH_MODE_TOGGLE:
+                        self.coordinator.data[f"switch{self._switch_id}_state"] = True
                 
         except Exception as err:
             _LOGGER.error("Error turning on switch %s: %s", self._switch_id, err)
             
-        await self.coordinator.async_request_refresh()
+        # Trigger state update
+        self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs) -> None:
         """Turn the switch off."""
         if self._switch_mode == SWITCH_MODE_PULSE:
             # In pulse mode, we don't actually send an off command
             # The device handles this automatically
+            _LOGGER.info("Pulse mode switch %s - no off command needed", self._switch_id)
             return
             
         try:
@@ -234,22 +220,26 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
                     self.coordinator.password,
                 )
 
-            # For toggle mode, disable switch hold on the device
-            _LOGGER.info("Disabling switch hold for switch %s", self._switch_id)
+            # For toggle mode, send switch off command
+            _LOGGER.info("Turning off switch %s (toggle mode)", self._switch_id)
             async with session.get(
-                f"{self.coordinator.base_url}{API_SWITCH_HOLD}",
+                f"{self.coordinator.base_url}{API_SWITCH_CONTROL}",
                 params={"switch": str(self._switch_id), "action": "off"},
                 auth=auth,
                 ssl=False,
                 raise_for_status=False
             ) as resp:
                 if resp.status != 200:
-                    _LOGGER.error("Failed to disable switch hold for switch %s: HTTP %s", self._switch_id, resp.status)
+                    _LOGGER.error("Failed to turn off switch %s: HTTP %s", self._switch_id, resp.status)
+                    content = await resp.text()
+                    _LOGGER.error("Response content: %s", content)
                 else:
-                    # Update coordinator data to reflect hold state
-                    self.coordinator.data[f"switch{self._switch_id}_hold_state"] = False
+                    _LOGGER.info("Successfully turned off switch %s", self._switch_id)
+                    # Update local state
+                    self.coordinator.data[f"switch{self._switch_id}_state"] = False
             
         except Exception as err:
             _LOGGER.error("Error turning off switch %s: %s", self._switch_id, err)
             
-        await self.coordinator.async_request_refresh()
+        # Trigger state update
+        self.async_write_ha_state()

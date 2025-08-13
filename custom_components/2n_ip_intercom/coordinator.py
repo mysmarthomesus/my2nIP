@@ -48,6 +48,9 @@ class TwoNIntercomDataUpdateCoordinator(DataUpdateCoordinator):
             name=DOMAIN,
             update_interval=timedelta(seconds=30),
         )
+        
+        # Initialize data dictionary to prevent KeyError
+        self.data = {}
 
     async def async_shutdown(self) -> None:
         """Shutdown the coordinator."""
@@ -112,24 +115,33 @@ class TwoNIntercomDataUpdateCoordinator(DataUpdateCoordinator):
                 try:
                     data = await resp.json()
                     _LOGGER.debug("Parsed JSON data: %s", data)
-                    return data
+                    # Ensure data is a dict and merge with existing data to preserve switch states
+                    if isinstance(data, dict):
+                        self.data.update(data)
+                        return self.data
+                    else:
+                        return self.data
                 except ValueError as err:
-                    # If JSON parsing fails, return minimal data
-                    _LOGGER.warning("Could not parse JSON response, using fallback data: %s", err)
-                    return {"status": "unknown", "timestamp": "unknown"}
+                    # If JSON parsing fails, return current data
+                    _LOGGER.warning("Could not parse JSON response, using current data: %s", err)
+                    return self.data if self.data else {"status": "unknown", "timestamp": "unknown"}
                         
         except aiohttp.ClientConnectorError as err:
             _LOGGER.error("Connection failed to %s:%s - %s", self.host, self.port, err)
-            raise UpdateFailed(f"Connection failed to {self.host}:{self.port}") from err
+            # Return existing data to prevent entity errors
+            return self.data if self.data else {"status": "offline", "error": "connection_failed"}
         except aiohttp.ClientError as err:
             _LOGGER.error("HTTP error communicating with %s:%s - %s", self.host, self.port, err)
-            raise UpdateFailed(f"Error communicating with API: {err}") from err
+            # Return existing data to prevent entity errors
+            return self.data if self.data else {"status": "offline", "error": "http_error"}
         except asyncio.TimeoutError:
             _LOGGER.error("Timeout connecting to %s:%s", self.host, self.port)
-            raise UpdateFailed(f"Timeout connecting to {self.host}:{self.port}") from None
+            # Return existing data to prevent entity errors
+            return self.data if self.data else {"status": "offline", "error": "timeout"}
         except Exception as err:
             _LOGGER.error("Unexpected error connecting to %s:%s - %s", self.host, self.port, err)
-            raise UpdateFailed(f"Unexpected error: {err}") from err
+            # Return existing data to prevent entity errors
+            return self.data if self.data else {"status": "offline", "error": "unexpected"}
 
     async def async_validate_input(self) -> bool:
         """Validate the user input allows us to connect."""
