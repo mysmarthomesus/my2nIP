@@ -15,6 +15,7 @@ from .const import (
     API_DOOR_CONTROL,
     SWITCH_MODE_PULSE,
     SWITCH_MODE_TOGGLE,
+    SWITCH_CONFIGS,
 )
 from .coordinator import TwoNIntercomDataUpdateCoordinator
 
@@ -28,10 +29,24 @@ async def async_setup_entry(
     """Set up 2N IP Intercom switch based on a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
 
-    switches = [
-        TwoNIntercomDoorSwitch(coordinator),
-        TwoNIntercomSwitch(coordinator, 1, f"{coordinator.device_name} Switch 1"),
-    ]
+    switches = []
+    
+    # Add door switch (always toggle mode)
+    switches.append(TwoNIntercomDoorSwitch(coordinator))
+    
+    # Add configurable switches based on SWITCH_CONFIGS
+    for switch_key, config in SWITCH_CONFIGS.items():
+        if switch_key.startswith("switch_"):
+            switch_id = int(switch_key.split("_")[1])
+            switch_name = f"{coordinator.device_name} {config['name']}"
+            switch_mode = config['mode']
+            
+            switches.append(TwoNIntercomSwitch(
+                coordinator, 
+                switch_id, 
+                switch_name, 
+                switch_mode
+            ))
 
     async_add_entities(switches)
 
@@ -117,10 +132,12 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
         coordinator: TwoNIntercomDataUpdateCoordinator,
         switch_id: int,
         name: str,
+        switch_mode: str = SWITCH_MODE_TOGGLE,
     ) -> None:
         """Initialize the switch."""
         super().__init__(coordinator)
         self._switch_id = switch_id
+        self._switch_mode = switch_mode  # Per-switch mode
         self._attr_name = name
         self._attr_unique_id = f"{coordinator.host}_switch_{switch_id}"
         self._attr_device_info = {
@@ -134,14 +151,15 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
     def extra_state_attributes(self):
         """Return the switch state attributes."""
         return {
-            "switch_mode": self.coordinator.switch_mode,
+            "switch_mode": self._switch_mode,  # Use per-switch mode
             "switch_id": self._switch_id,
+            "global_switch_mode": self.coordinator.switch_mode,  # Keep global for reference
         }
 
     @property
     def is_on(self) -> bool:
         """Return true if switch is on."""
-        if self.coordinator.switch_mode == SWITCH_MODE_TOGGLE:
+        if self._switch_mode == SWITCH_MODE_TOGGLE:
             # In toggle mode, track the state locally
             return self.coordinator._switch_states.get(f"switch_{self._switch_id}", False)
         else:
@@ -171,7 +189,7 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
                     _LOGGER.error("Failed to turn on switch %s: HTTP %s", self._switch_id, resp.status)
                     
             # Update local state for toggle mode
-            if self.coordinator.switch_mode == SWITCH_MODE_TOGGLE:
+            if self._switch_mode == SWITCH_MODE_TOGGLE:
                 self.coordinator._switch_states[f"switch_{self._switch_id}"] = True
                 
         except Exception as err:
@@ -181,7 +199,7 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs) -> None:
         """Turn the switch off."""
-        if self.coordinator.switch_mode == SWITCH_MODE_PULSE:
+        if self._switch_mode == SWITCH_MODE_PULSE:
             # In pulse mode, we don't actually send an off command
             # The device handles this automatically
             return

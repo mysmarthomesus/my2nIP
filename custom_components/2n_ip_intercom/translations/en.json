@@ -18,7 +18,7 @@
           "port": "Port number (default: 80)",
           "username": "Username for authentication (default: admin)", 
           "password": "Password for authentication (default: 2n)",
-          "switch_mode": "Toggle: Switch stays on until off command. Pulse: Traditional momentary switch."
+          "switch_mode": "Default Switch Mode (can be overridden per switch)"
         }
       }
     },

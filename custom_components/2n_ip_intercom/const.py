@@ -22,6 +22,15 @@ SWITCH_MODE_TOGGLE = "toggle"  # Hold until off command
 # Default switch mode
 DEFAULT_SWITCH_MODE = SWITCH_MODE_TOGGLE
 
+# Switch configurations - can be customized per installation
+SWITCH_CONFIGS = {
+    "door": {"mode": SWITCH_MODE_TOGGLE, "name": "Door"},
+    "switch_1": {"mode": SWITCH_MODE_TOGGLE, "name": "Switch 1"},
+    "switch_2": {"mode": SWITCH_MODE_PULSE, "name": "Switch 2 (Pulse)"},
+    "switch_3": {"mode": SWITCH_MODE_PULSE, "name": "Switch 3 (Pulse)"},
+    "switch_4": {"mode": SWITCH_MODE_TOGGLE, "name": "Switch 4"},
+}
+
 # Available controls
 CONTROL_TYPES = {
     "switch": API_SWITCH_CONTROL,
