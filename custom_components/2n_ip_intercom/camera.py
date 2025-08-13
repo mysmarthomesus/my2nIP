@@ -1,6 +1,7 @@
 """Support for 2N IP Intercom camera."""
 from __future__ import annotations
 
+import asyncio
 import aiohttp
 import logging
 
@@ -75,11 +76,14 @@ class TwoNCamera(Camera):
             # 2N uses this endpoint for snapshots
             url = f"http://{self.coordinator.host}{API_CAMERA_SNAPSHOT}"
             
+            timeout = aiohttp.ClientTimeout(total=10, connect=5)
+            
             async with websession.get(
                 url,
                 auth=auth,
-                timeout=10,
+                timeout=timeout,
                 ssl=False,
+                raise_for_status=False,
             ) as response:
                 if response.status == 200:
                     return await response.read()
@@ -100,8 +104,12 @@ class TwoNCamera(Camera):
                 except Exception as e:
                     _LOGGER.debug("Could not read error response: %s", e)
                 
+        except aiohttp.ClientConnectorError as err:
+            _LOGGER.error("Connection failed to camera at %s: %s", self.coordinator.host, err)
+        except asyncio.TimeoutError:
+            _LOGGER.error("Timeout getting camera image from %s", self.coordinator.host)
         except Exception as err:
-            _LOGGER.error("Error getting camera image: %s", err)
+            _LOGGER.error("Error getting camera image from %s: %s", self.coordinator.host, err)
             
         return None
 

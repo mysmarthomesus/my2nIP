@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import aiohttp
+import logging
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -16,6 +17,8 @@ from .const import (
     SWITCH_MODE_TOGGLE,
 )
 from .coordinator import TwoNIntercomDataUpdateCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -55,7 +58,8 @@ class TwoNIntercomDoorSwitch(CoordinatorEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs) -> None:
         """Unlock the door."""
-        async with aiohttp.ClientSession() as session:
+        try:
+            session = await self.coordinator._get_session()
             auth = None
             if self.coordinator.username and self.coordinator.password:
                 auth = aiohttp.BasicAuth(
@@ -63,16 +67,25 @@ class TwoNIntercomDoorSwitch(CoordinatorEntity, SwitchEntity):
                     self.coordinator.password,
                 )
 
-            await session.get(
+            async with session.get(
                 f"{self.coordinator.base_url}{API_DOOR_CONTROL}",
                 params={"switch": "1", "action": "on"},
                 auth=auth,
-            )
+                ssl=False,
+                raise_for_status=False
+            ) as resp:
+                if resp.status != 200:
+                    _LOGGER.error("Failed to turn on door switch: HTTP %s", resp.status)
+                    
+        except Exception as err:
+            _LOGGER.error("Error turning on door switch: %s", err)
+            
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs) -> None:
         """Lock the door."""
-        async with aiohttp.ClientSession() as session:
+        try:
+            session = await self.coordinator._get_session()
             auth = None
             if self.coordinator.username and self.coordinator.password:
                 auth = aiohttp.BasicAuth(
@@ -80,11 +93,19 @@ class TwoNIntercomDoorSwitch(CoordinatorEntity, SwitchEntity):
                     self.coordinator.password,
                 )
 
-            await session.get(
+            async with session.get(
                 f"{self.coordinator.base_url}{API_DOOR_CONTROL}",
                 params={"switch": "1", "action": "off"},
                 auth=auth,
-            )
+                ssl=False,
+                raise_for_status=False
+            ) as resp:
+                if resp.status != 200:
+                    _LOGGER.error("Failed to turn off door switch: HTTP %s", resp.status)
+                    
+        except Exception as err:
+            _LOGGER.error("Error turning off door switch: %s", err)
+            
         await self.coordinator.async_request_refresh()
 
 
@@ -129,7 +150,8 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs) -> None:
         """Turn the switch on."""
-        async with aiohttp.ClientSession() as session:
+        try:
+            session = await self.coordinator._get_session()
             auth = None
             if self.coordinator.username and self.coordinator.password:
                 auth = aiohttp.BasicAuth(
@@ -138,16 +160,23 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
                 )
 
             # Send switch on command
-            await session.get(
+            async with session.get(
                 f"{self.coordinator.base_url}{API_SWITCH_CONTROL}",
                 params={"switch": str(self._switch_id), "action": "on"},
                 auth=auth,
-            )
-            
+                ssl=False,
+                raise_for_status=False
+            ) as resp:
+                if resp.status != 200:
+                    _LOGGER.error("Failed to turn on switch %s: HTTP %s", self._switch_id, resp.status)
+                    
             # Update local state for toggle mode
             if self.coordinator.switch_mode == SWITCH_MODE_TOGGLE:
                 self.coordinator._switch_states[f"switch_{self._switch_id}"] = True
                 
+        except Exception as err:
+            _LOGGER.error("Error turning on switch %s: %s", self._switch_id, err)
+            
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs) -> None:
@@ -157,7 +186,8 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
             # The device handles this automatically
             return
             
-        async with aiohttp.ClientSession() as session:
+        try:
+            session = await self.coordinator._get_session()
             auth = None
             if self.coordinator.username and self.coordinator.password:
                 auth = aiohttp.BasicAuth(
@@ -166,13 +196,20 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
                 )
 
             # Send switch off command (only in toggle mode)
-            await session.get(
+            async with session.get(
                 f"{self.coordinator.base_url}{API_SWITCH_CONTROL}",
                 params={"switch": str(self._switch_id), "action": "off"},
                 auth=auth,
-            )
-            
+                ssl=False,
+                raise_for_status=False
+            ) as resp:
+                if resp.status != 200:
+                    _LOGGER.error("Failed to turn off switch %s: HTTP %s", self._switch_id, resp.status)
+                    
             # Update local state
             self.coordinator._switch_states[f"switch_{self._switch_id}"] = False
+            
+        except Exception as err:
+            _LOGGER.error("Error turning off switch %s: %s", self._switch_id, err)
             
         await self.coordinator.async_request_refresh()
