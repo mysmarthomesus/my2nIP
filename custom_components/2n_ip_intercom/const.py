@@ -12,6 +12,7 @@ CONF_SWITCH_MODE = "switch_mode"
 # API endpoints
 API_SYSTEM_STATUS = "/api/system/info"
 API_SWITCH_CONTROL = "/api/switch/ctrl"
+API_SWITCH_HOLD = "/api/switch/hold"  # Switch hold control
 API_DOOR_CONTROL = "/api/door/ctrl"
 API_CAMERA_SNAPSHOT = "/api/camera/snapshot"
 
