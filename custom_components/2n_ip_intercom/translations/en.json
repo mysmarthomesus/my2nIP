@@ -9,12 +9,27 @@
           "name": "Device Name (optional)",
           "port": "Port",
           "username": "Username",
-          "password": "Password"
+          "password": "Password",
+          "switch_mode": "Switch Mode"
+        },
+        "data_description": {
+          "host": "The IP address of your 2N IP Intercom device",
+          "name": "Custom name for this device (if not provided, will default to '2N IP Intercom (host)')",
+          "port": "Port number (default: 80)",
+          "username": "Username for authentication (default: admin)", 
+          "password": "Password for authentication (default: 2n)",
+          "switch_mode": "Toggle: Switch stays on until off command. Pulse: Traditional momentary switch."
         }
       }
     },
     "error": {
       "unknown": "Unexpected error occurred"
+    }
+  },
+  "options": {
+    "switch_mode": {
+      "pulse": "Pulse (Momentary)",
+      "toggle": "Toggle (Hold until off)"
     }
   }
 }

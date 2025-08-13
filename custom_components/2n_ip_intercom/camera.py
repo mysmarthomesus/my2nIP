@@ -13,7 +13,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import DOMAIN
+from .const import DOMAIN, API_CAMERA_SNAPSHOT
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ class TwoNCamera(Camera):
                 auth = aiohttp.BasicAuth(self.coordinator.username, self.coordinator.password)
 
             # 2N uses this endpoint for snapshots
-            url = f"http://{self.coordinator.host}/api/camera/snapshot"
+            url = f"http://{self.coordinator.host}{API_CAMERA_SNAPSHOT}"
             
             async with websession.get(
                 url,
@@ -110,5 +110,5 @@ class TwoNCamera(Camera):
         """Return the camera state attributes."""
         return {
             "rtsp_url": f"rtsp://{self.coordinator.host}:554/h264_stream",
-            "snapshot_url": f"http://{self.coordinator.host}/api/camera/snapshot",
+            "snapshot_url": f"http://{self.coordinator.host}{API_CAMERA_SNAPSHOT}",
         }

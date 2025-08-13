@@ -21,6 +21,8 @@ from .const import (
     DOMAIN,
     API_SYSTEM_STATUS,
     CONF_NAME,
+    CONF_SWITCH_MODE,
+    DEFAULT_SWITCH_MODE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,8 +37,10 @@ class TwoNIntercomDataUpdateCoordinator(DataUpdateCoordinator):
         self.username = config.get(CONF_USERNAME)
         self.password = config.get(CONF_PASSWORD)
         self.device_name = config.get(CONF_NAME, f"2N IP Intercom ({self.host})")
+        self.switch_mode = config.get(CONF_SWITCH_MODE, DEFAULT_SWITCH_MODE)
         self.base_url = f"http://{self.host}:{self.port}"
         self._session = None
+        self._switch_states = {}  # Track switch states for toggle mode
 
         super().__init__(
             hass,

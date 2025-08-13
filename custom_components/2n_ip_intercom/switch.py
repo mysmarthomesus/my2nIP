@@ -12,6 +12,8 @@ from .const import (
     DOMAIN,
     API_SWITCH_CONTROL,
     API_DOOR_CONTROL,
+    SWITCH_MODE_PULSE,
+    SWITCH_MODE_TOGGLE,
 )
 from .coordinator import TwoNIntercomDataUpdateCoordinator
 
@@ -108,9 +110,22 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
         }
 
     @property
+    def extra_state_attributes(self):
+        """Return the switch state attributes."""
+        return {
+            "switch_mode": self.coordinator.switch_mode,
+            "switch_id": self._switch_id,
+        }
+
+    @property
     def is_on(self) -> bool:
         """Return true if switch is on."""
-        return self.coordinator.data.get(f"switch{self._switch_id}State") == "on"
+        if self.coordinator.switch_mode == SWITCH_MODE_TOGGLE:
+            # In toggle mode, track the state locally
+            return self.coordinator._switch_states.get(f"switch_{self._switch_id}", False)
+        else:
+            # In pulse mode, check coordinator data (traditional behavior)
+            return self.coordinator.data.get(f"switch{self._switch_id}State") == "on"
 
     async def async_turn_on(self, **kwargs) -> None:
         """Turn the switch on."""
@@ -122,15 +137,26 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
                     self.coordinator.password,
                 )
 
+            # Send switch on command
             await session.get(
                 f"{self.coordinator.base_url}{API_SWITCH_CONTROL}",
                 params={"switch": str(self._switch_id), "action": "on"},
                 auth=auth,
             )
+            
+            # Update local state for toggle mode
+            if self.coordinator.switch_mode == SWITCH_MODE_TOGGLE:
+                self.coordinator._switch_states[f"switch_{self._switch_id}"] = True
+                
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs) -> None:
         """Turn the switch off."""
+        if self.coordinator.switch_mode == SWITCH_MODE_PULSE:
+            # In pulse mode, we don't actually send an off command
+            # The device handles this automatically
+            return
+            
         async with aiohttp.ClientSession() as session:
             auth = None
             if self.coordinator.username and self.coordinator.password:
@@ -139,9 +165,14 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
                     self.coordinator.password,
                 )
 
+            # Send switch off command (only in toggle mode)
             await session.get(
                 f"{self.coordinator.base_url}{API_SWITCH_CONTROL}",
                 params={"switch": str(self._switch_id), "action": "off"},
                 auth=auth,
             )
+            
+            # Update local state
+            self.coordinator._switch_states[f"switch_{self._switch_id}"] = False
+            
         await self.coordinator.async_request_refresh()

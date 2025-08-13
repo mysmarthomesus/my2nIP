@@ -1,11 +1,16 @@
 # 2N IP Intercom for Home Assistant
 
-This custom component integrates the 2N IP Intercom via its HTTP API into Home Assistant. It supports both sensor and switch platforms.
+This custom component integrates the 2N IP Intercom via its HTTP API into Home Assistant. It supports camera, sensor, and switch platforms with advanced switch control modes.
 
 ## Features
 
-- **Sensor**: Polls the intercom status every 30 seconds.
-- **Switch**: Allows control of a switch function (if supported by the device).
+- **Camera**: Live RTSP stream and snapshot capture
+- **Sensor**: Polls the intercom status every 30 seconds
+- **Switch**: Advanced control with two modes:
+  - **Toggle Mode**: Switch holds state until off command (perfect for gates/doors)
+  - **Pulse Mode**: Traditional momentary pulse behavior (for door strikes/buzzers)
+- **Custom Device Naming**: Give meaningful names to your devices during setup
+- **Multiple Device Support**: Each device can have its own custom name and switch mode
 
 ## Installation
 HACS

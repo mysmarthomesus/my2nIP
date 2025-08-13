@@ -21,6 +21,10 @@ from .const import (
     DEFAULT_USERNAME,
     DEFAULT_PASSWORD,
     CONF_NAME,
+    CONF_SWITCH_MODE,
+    SWITCH_MODE_PULSE,
+    SWITCH_MODE_TOGGLE,
+    DEFAULT_SWITCH_MODE,
 )
 from .coordinator import TwoNIntercomDataUpdateCoordinator
 
@@ -67,6 +71,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Optional(CONF_PORT, default=DEFAULT_PORT): int,
                     vol.Optional(CONF_USERNAME, default=DEFAULT_USERNAME): str,
                     vol.Optional(CONF_PASSWORD, default=DEFAULT_PASSWORD): str,
+                    vol.Optional(CONF_SWITCH_MODE, default=DEFAULT_SWITCH_MODE): vol.In([
+                        SWITCH_MODE_PULSE,
+                        SWITCH_MODE_TOGGLE,
+                    ]),
                 }
             ),
             errors=errors,
