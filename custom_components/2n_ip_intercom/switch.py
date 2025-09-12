@@ -169,7 +169,7 @@ class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
 
         async def auto_release():
             try:
-                await asyncio.sleep(5)
+                await asyncio.sleep(15)
                 await self._send_action("release")
                 self._state = False
                 self.async_write_ha_state()
