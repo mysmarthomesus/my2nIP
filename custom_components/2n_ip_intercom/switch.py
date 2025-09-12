@@ -164,28 +164,28 @@ class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
         self.async_write_ha_state()
 
         # Cancel any existing auto-release task
-        if self._release_task and not self._release_task.done():
-            self._release_task.cancel()
+        #if self._release_task and not self._release_task.done():
+         #   self._release_task.cancel()
 
-        async def auto_release():
-            try:
-                await asyncio.sleep(15)
-                await self._send_action("release")
-                self._state = False
-                self.async_write_ha_state()
-            except asyncio.CancelledError:
-                pass
+       # async def auto_release():
+        #    try:
+         #       await asyncio.sleep(15)
+          #      await self._send_action("release")
+           #     self._state = False
+            #    self.async_write_ha_state()
+            #except asyncio.CancelledError:
+             #   pass
 
-        self._release_task = self.hass.async_create_task(auto_release())
+        #self._release_task = self.hass.async_create_task(auto_release())
 
-    async def async_turn_off(self, **kwargs) -> None:
+    #async def async_turn_off(self, **kwargs) -> None:
         """Send release action immediately."""
-        if self._release_task and not self._release_task.done():
-            self._release_task.cancel()
+     #   if self._release_task and not self._release_task.done():
+      #      self._release_task.cancel()
 
-        await self._send_action("release")
-        self._state = False
-        self.async_write_ha_state()
+       # await self._send_action("release")
+        #self._state = False
+        #self.async_write_ha_state()
 
     async def _send_action(self, action: str) -> None:
         params = {"switch": str(self._switch_id), "action": action}
