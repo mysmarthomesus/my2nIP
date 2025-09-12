@@ -169,7 +169,7 @@ class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
 
         async def auto_release():
             try:
-                await asyncio.sleep(15)
+                await asyncio.sleep(5)
                 await self._send_action("release")
                 self._state = False
                 self.async_write_ha_state()
@@ -181,7 +181,7 @@ class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
     async def async_turn_off(self, **kwargs) -> None:
         """Send release action immediately."""
         if self._release_task and not self._release_task.done():
-      #     self._release_task.cancel()
+            self._release_task.cancel()
 
         await self._send_action("release")
         self._state = False
