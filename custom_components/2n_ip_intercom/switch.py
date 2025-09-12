@@ -138,7 +138,9 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
 class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
     """Hold switch for bistable 2N ports (uses hold/release actions)."""
 
-    def __init__(self, coordinator, switch_id: int, name: str) -> None:
+    AUTO_RELEASE_SECONDS = 15  # Duration to hold before auto-release
+
+    def __init__(self, coordinator: TwoNIntercomDataUpdateCoordinator, switch_id: int, name: str) -> None:
         super().__init__(coordinator)
         self._switch_id = switch_id
         self._attr_name = name
@@ -154,14 +156,18 @@ class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool:
-        """Return true if currently held."""
+        """Return True if currently held."""
         return self._state
 
     async def async_turn_on(self, **kwargs) -> None:
-        """Send hold action, then auto-release after 5s."""
-        await self._send_action("hold")
-        self._state = True
-        self.async_write_ha_state()
+        """Send hold action, then auto-release after AUTO_RELEASE_SECONDS."""
+        try:
+            await self._send_action("hold")
+            self._state = True
+            self.async_write_ha_state()
+        except Exception as e:
+            _LOGGER.error("Failed to hold switch %s: %s", self._switch_id, e)
+            return
 
         # Cancel any existing auto-release task
         if self._release_task and not self._release_task.done():
@@ -169,36 +175,60 @@ class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
 
         async def auto_release():
             try:
-                await asyncio.sleep(15)
+                await asyncio.sleep(self.AUTO_RELEASE_SECONDS)
                 await self._send_action("release")
                 self._state = False
                 self.async_write_ha_state()
             except asyncio.CancelledError:
                 pass
+            except Exception as e:
+                _LOGGER.error("Failed to auto-release switch %s: %s", self._switch_id, e)
 
         self._release_task = self.hass.async_create_task(auto_release())
 
     async def async_turn_off(self, **kwargs) -> None:
-        """Send release action immediately."""
+        """Send release action immediately and cancel any pending auto-release."""
         if self._release_task and not self._release_task.done():
-      #     self._release_task.cancel()
+            self._release_task.cancel()
 
-        await self._send_action("release")
-        self._state = False
-        self.async_write_ha_state()
+        try:
+            await self._send_action("release")
+            self._state = False
+            self.async_write_ha_state()
+        except Exception as e:
+            _LOGGER.error("Failed to release switch %s: %s", self._switch_id, e)
 
     async def _send_action(self, action: str) -> None:
+        """Send hold or release action to the 2N switch."""
         params = {"switch": str(self._switch_id), "action": action}
-        async with aiohttp.ClientSession() as session:
+
+        # Reuse session from coordinator if available, otherwise create new session
+        session = getattr(self.coordinator, "_aiohttp_session", None)
+        close_session = False
+        if session is None:
+            session = aiohttp.ClientSession()
+            close_session = True
+
+        try:
             auth = (
                 aiohttp.BasicAuth(self.coordinator.username, self.coordinator.password)
                 if self.coordinator.username and self.coordinator.password
                 else None
             )
-            await session.get(
+            async with session.get(
                 f"{self.coordinator.base_url}{API_SWITCH_CONTROL}",
                 params=params,
                 auth=auth,
-            )
+            ) as resp:
+                if resp.status != 200:
+                    _LOGGER.warning(
+                        "Failed to send action '%s' to switch %s, HTTP status %s",
+                        action,
+                        self._switch_id,
+                        resp.status,
+                    )
+        finally:
+            if close_session:
+                await session.close()
 
         await self.coordinator.async_request_refresh()
