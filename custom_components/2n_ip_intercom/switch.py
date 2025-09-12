@@ -1,6 +1,7 @@
 """Support for 2N IP Intercom switches with optional hold switches."""
 from __future__ import annotations
 
+import asyncio
 import aiohttp
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
@@ -137,12 +138,7 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
 class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
     """Hold switch for bistable 2N ports (uses hold/release actions)."""
 
-    def __init__(
-        self,
-        coordinator: TwoNIntercomDataUpdateCoordinator,
-        switch_id: int,
-        name: str,
-    ) -> None:
+    def __init__(self, coordinator, switch_id: int, name: str) -> None:
         super().__init__(coordinator)
         self._switch_id = switch_id
         self._attr_name = name
@@ -154,30 +150,45 @@ class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
             model="IP Intercom",
         )
         self._state = False
+        self._release_task: asyncio.Task | None = None
 
     @property
     def is_on(self) -> bool:
-        """Return true if switch is being held."""
+        """Return true if currently held."""
         return self._state
 
     async def async_turn_on(self, **kwargs) -> None:
-        """Send hold action (keeps the switch active)."""
-        timeout = kwargs.get("timeout")  # Optional timeout support
-        await self._send_hold_action("hold", timeout)
+        """Send hold action, then auto-release after 5s."""
+        await self._send_action("hold")
         self._state = True
         self.async_write_ha_state()
 
+        # Cancel any existing auto-release task
+        if self._release_task and not self._release_task.done():
+            self._release_task.cancel()
+
+        async def auto_release():
+            try:
+                await asyncio.sleep(5)
+                await self._send_action("release")
+                self._state = False
+                self.async_write_ha_state()
+            except asyncio.CancelledError:
+                pass
+
+        self._release_task = self.hass.async_create_task(auto_release())
+
     async def async_turn_off(self, **kwargs) -> None:
-        """Send release action (releases the switch)."""
-        await self._send_hold_action("release")
+        """Send release action immediately."""
+        if self._release_task and not self._release_task.done():
+            self._release_task.cancel()
+
+        await self._send_action("release")
         self._state = False
         self.async_write_ha_state()
 
-    async def _send_hold_action(self, action: str, timeout: int | None = None) -> None:
+    async def _send_action(self, action: str) -> None:
         params = {"switch": str(self._switch_id), "action": action}
-        if action == "hold" and timeout:
-            params["timeout"] = str(timeout)
-
         async with aiohttp.ClientSession() as session:
             auth = (
                 aiohttp.BasicAuth(self.coordinator.username, self.coordinator.password)
