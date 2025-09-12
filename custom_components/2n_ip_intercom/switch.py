@@ -28,28 +28,36 @@ async def async_setup_entry(
     ]
 
     # Add additional port/hold switches if available
-    for switch_id, switch_info in enumerate(coordinator.data.get("ports", []), start=2):
-        # Normal switch
+    ports = coordinator.data.get("ports", [])
+    if not ports:
+        _LOGGER.debug("No ports data found. Adding test hold switch.")
+        # Add a dummy hold switch for testing
         switches.append(
-            TwoNIntercomSwitch(
-                coordinator,
-                switch_id,
-                switch_info.get("name", f"Switch {switch_id}"),
-            )
+            TwoNIntercomHoldSwitch(coordinator, 2, f"{coordinator.device_name} Test Hold")
         )
-
-        # Add hold switch if bistable
-        if switch_info.get("mode") == "bistable":
+    else:
+        for switch_id, switch_info in enumerate(ports, start=2):
+            # Normal switch
             switches.append(
-                TwoNIntercomHoldSwitch(
+                TwoNIntercomSwitch(
                     coordinator,
                     switch_id,
-                    f"{switch_info.get('name', f'Switch {switch_id}')} Hold",
+                    switch_info.get("name", f"Switch {switch_id}"),
                 )
             )
 
-    async_add_entities(switches)
+            # Add hold switch if bistable
+            if switch_info.get("mode") == "bistable":
+                switches.append(
+                    TwoNIntercomHoldSwitch(
+                        coordinator,
+                        switch_id,
+                        f"{switch_info.get('name', f'Switch {switch_id}')} Hold",
+                    )
+                )
 
+    async_add_entities(switches)
+    _LOGGER.debug("Added switches: %s", [s.name for s in switches])
 
 class TwoNIntercomDoorSwitch(CoordinatorEntity, SwitchEntity):
     """Representation of a 2N IP Intercom door switch."""
