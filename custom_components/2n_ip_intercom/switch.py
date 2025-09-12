@@ -41,8 +41,10 @@ async def async_setup_entry(
         # Add hold + release switches if bistable
         if switch_info.get("mode") == "bistable":
             base_name = switch_info.get("name", f"Switch {switch_id}")
-            switches.append(TwoNIntercomHoldSwitch(coordinator, switch_id, f"{base_name} Hold"))
-            switches.append(TwoNIntercomReleaseSwitch(coordinator, switch_id, f"{base_name} Release"))
+            hold_entity = TwoNIntercomHoldSwitch(coordinator, switch_id, f"{base_name} Hold")
+            release_entity = TwoNIntercomReleaseSwitch(coordinator, switch_id, f"{base_name} Release", hold_entity)
+            switches.append(hold_entity)
+            switches.append(release_entity)
 
     async_add_entities(switches)
 
@@ -158,10 +160,8 @@ class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs) -> None:
-        """Turning off hold will send release."""
-        await self._send_action("release")
-        self._state = False
-        self.async_write_ha_state()
+        """Disabled: use the Release button to end hold."""
+        return
 
     async def _send_action(self, action: str) -> None:
         params = {"switch": str(self._switch_id), "action": action}
@@ -178,11 +178,16 @@ class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
             )
         await self.coordinator.async_request_refresh()
 
+    def release(self) -> None:
+        """Called externally when Release switch is pressed."""
+        self._state = False
+        self.async_write_ha_state()
+
 
 class TwoNIntercomReleaseSwitch(CoordinatorEntity, SwitchEntity):
     """Release switch for bistable 2N ports."""
 
-    def __init__(self, coordinator, switch_id: int, name: str) -> None:
+    def __init__(self, coordinator, switch_id: int, name: str, hold_entity: TwoNIntercomHoldSwitch) -> None:
         super().__init__(coordinator)
         self._switch_id = switch_id
         self._attr_name = name
@@ -193,6 +198,7 @@ class TwoNIntercomReleaseSwitch(CoordinatorEntity, SwitchEntity):
             manufacturer="2N",
             model="IP Intercom",
         )
+        self._hold_entity = hold_entity
         self._state = False
 
     @property
@@ -200,12 +206,15 @@ class TwoNIntercomReleaseSwitch(CoordinatorEntity, SwitchEntity):
         return self._state
 
     async def async_turn_on(self, **kwargs) -> None:
-        """Send release action (stateless trigger)."""
+        """Send release action and reset hold switch."""
         await self._send_action("release")
         self._state = True
         self.async_write_ha_state()
 
-        # Auto reset state back to off
+        # Reset hold entity state
+        self._hold_entity.release()
+
+        # Reset release back to off after 1s
         await asyncio.sleep(1)
         self._state = False
         self.async_write_ha_state()
