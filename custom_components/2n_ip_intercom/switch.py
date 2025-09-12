@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import aiohttp
+import logging
+
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -13,6 +15,8 @@ from homeassistant.helpers.entity import DeviceInfo
 from .const import DOMAIN, API_SWITCH_CONTROL, API_DOOR_CONTROL
 from .coordinator import TwoNIntercomDataUpdateCoordinator
 
+_LOGGER = logging.getLogger(__name__)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -22,13 +26,23 @@ async def async_setup_entry(
     """Set up 2N IP Intercom switches based on a config entry."""
     coordinator: TwoNIntercomDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    switches: list[SwitchEntity] = [
-        TwoNIntercomDoorSwitch(coordinator),
-        TwoNIntercomSwitch(coordinator, 1, f"{coordinator.device_name} Switch 1"),
-    ]
+    if not coordinator.data:
+        _LOGGER.warning("Coordinator has no data yet, initializing empty ports")
+        coordinator.data = {"ports": []}
 
-    # Add additional port/hold/release switches if available
-    for switch_id, switch_info in enumerate(coordinator.data.get("ports", []), start=2):
+    switches: list[SwitchEntity] = []
+
+    # Door switch
+    switches.append(TwoNIntercomDoorSwitch(coordinator))
+
+    # Main switch 1
+    switches.append(TwoNIntercomSwitch(coordinator, 1, f"{coordinator.device_name} Switch 1"))
+
+    # Additional port switches
+    ports = coordinator.data.get("ports", [])
+    _LOGGER.debug("Coordinator ports: %s", ports)
+
+    for switch_id, switch_info in enumerate(ports, start=2):
         # Normal switch
         switches.append(
             TwoNIntercomSwitch(
@@ -38,19 +52,20 @@ async def async_setup_entry(
             )
         )
 
-        # Add hold + release switches if bistable
+        # Hold + Release for bistable switches
         if switch_info.get("mode") == "bistable":
             base_name = switch_info.get("name", f"Switch {switch_id}")
-            hold_entity = TwoNIntercomHoldSwitch(coordinator, switch_id, f"{base_name} Hold")
-            release_entity = TwoNIntercomReleaseSwitch(coordinator, switch_id, f"{base_name} Release", hold_entity)
-            switches.append(hold_entity)
-            switches.append(release_entity)
+            switches.append(TwoNIntercomHoldSwitch(coordinator, switch_id, f"{base_name} Hold"))
+            switches.append(TwoNIntercomReleaseSwitch(coordinator, switch_id, f"{base_name} Release"))
+
+    for switch in switches:
+        _LOGGER.info("Adding switch entity: %s (%s)", switch.name, switch.unique_id)
 
     async_add_entities(switches)
 
 
 class TwoNIntercomDoorSwitch(CoordinatorEntity, SwitchEntity):
-    """Representation of a 2N IP Intercom door switch."""
+    """Door switch for 2N IP Intercom."""
 
     def __init__(self, coordinator: TwoNIntercomDataUpdateCoordinator) -> None:
         super().__init__(coordinator)
@@ -75,11 +90,8 @@ class TwoNIntercomDoorSwitch(CoordinatorEntity, SwitchEntity):
 
     async def _send_door_action(self, action: str) -> None:
         async with aiohttp.ClientSession() as session:
-            auth = (
-                aiohttp.BasicAuth(self.coordinator.username, self.coordinator.password)
-                if self.coordinator.username and self.coordinator.password
-                else None
-            )
+            auth = aiohttp.BasicAuth(self.coordinator.username, self.coordinator.password) \
+                if self.coordinator.username and self.coordinator.password else None
             await session.get(
                 f"{self.coordinator.base_url}{API_DOOR_CONTROL}",
                 params={"switch": "1", "action": action},
@@ -89,14 +101,9 @@ class TwoNIntercomDoorSwitch(CoordinatorEntity, SwitchEntity):
 
 
 class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
-    """Representation of a 2N IP Intercom switch."""
+    """Normal switch for 2N IP Intercom."""
 
-    def __init__(
-        self,
-        coordinator: TwoNIntercomDataUpdateCoordinator,
-        switch_id: int,
-        name: str,
-    ) -> None:
+    def __init__(self, coordinator: TwoNIntercomDataUpdateCoordinator, switch_id: int, name: str) -> None:
         super().__init__(coordinator)
         self._switch_id = switch_id
         self._attr_name = name
@@ -120,11 +127,8 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
 
     async def _send_switch_action(self, action: str) -> None:
         async with aiohttp.ClientSession() as session:
-            auth = (
-                aiohttp.BasicAuth(self.coordinator.username, self.coordinator.password)
-                if self.coordinator.username and self.coordinator.password
-                else None
-            )
+            auth = aiohttp.BasicAuth(self.coordinator.username, self.coordinator.password) \
+                if self.coordinator.username and self.coordinator.password else None
             await session.get(
                 f"{self.coordinator.base_url}{API_SWITCH_CONTROL}",
                 params={"switch": str(self._switch_id), "action": action},
@@ -134,7 +138,7 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
 
 
 class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
-    """Hold switch for bistable 2N ports."""
+    """Hold switch for bistable ports (manual hold until release)."""
 
     def __init__(self, coordinator, switch_id: int, name: str) -> None:
         super().__init__(coordinator)
@@ -154,23 +158,22 @@ class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
         return self._state
 
     async def async_turn_on(self, **kwargs) -> None:
-        """Send hold action."""
+        """Send hold action until manually released."""
         await self._send_action("hold")
         self._state = True
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs) -> None:
-        """Disabled: use the Release button to end hold."""
-        return
+        """Release hold manually."""
+        await self._send_action("release")
+        self._state = False
+        self.async_write_ha_state()
 
     async def _send_action(self, action: str) -> None:
         params = {"switch": str(self._switch_id), "action": action}
         async with aiohttp.ClientSession() as session:
-            auth = (
-                aiohttp.BasicAuth(self.coordinator.username, self.coordinator.password)
-                if self.coordinator.username and self.coordinator.password
-                else None
-            )
+            auth = aiohttp.BasicAuth(self.coordinator.username, self.coordinator.password) \
+                if self.coordinator.username and self.coordinator.password else None
             await session.get(
                 f"{self.coordinator.base_url}{API_SWITCH_CONTROL}",
                 params=params,
@@ -178,16 +181,11 @@ class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
             )
         await self.coordinator.async_request_refresh()
 
-    def release(self) -> None:
-        """Called externally when Release switch is pressed."""
-        self._state = False
-        self.async_write_ha_state()
-
 
 class TwoNIntercomReleaseSwitch(CoordinatorEntity, SwitchEntity):
-    """Release switch for bistable 2N ports."""
+    """Release switch for bistable ports (manual release)."""
 
-    def __init__(self, coordinator, switch_id: int, name: str, hold_entity: TwoNIntercomHoldSwitch) -> None:
+    def __init__(self, coordinator, switch_id: int, name: str) -> None:
         super().__init__(coordinator)
         self._switch_id = switch_id
         self._attr_name = name
@@ -198,7 +196,6 @@ class TwoNIntercomReleaseSwitch(CoordinatorEntity, SwitchEntity):
             manufacturer="2N",
             model="IP Intercom",
         )
-        self._hold_entity = hold_entity
         self._state = False
 
     @property
@@ -206,32 +203,29 @@ class TwoNIntercomReleaseSwitch(CoordinatorEntity, SwitchEntity):
         return self._state
 
     async def async_turn_on(self, **kwargs) -> None:
-        """Send release action and reset hold switch."""
+        """Send release action (stateless trigger)."""
         await self._send_action("release")
         self._state = True
         self.async_write_ha_state()
 
-        # Reset hold entity state
-        self._hold_entity.release()
+        # Reset state after 1 second for momentary button effect
+        async def reset_state():
+            await asyncio.sleep(1)
+            self._state = False
+            self.async_write_ha_state()
 
-        # Reset release back to off after 1s
-        await asyncio.sleep(1)
-        self._state = False
-        self.async_write_ha_state()
+        self.hass.async_create_task(reset_state())
 
     async def async_turn_off(self, **kwargs) -> None:
-        """No-op, release is momentary."""
+        """No-op for release button."""
         self._state = False
         self.async_write_ha_state()
 
     async def _send_action(self, action: str) -> None:
         params = {"switch": str(self._switch_id), "action": action}
         async with aiohttp.ClientSession() as session:
-            auth = (
-                aiohttp.BasicAuth(self.coordinator.username, self.coordinator.password)
-                if self.coordinator.username and self.coordinator.password
-                else None
-            )
+            auth = aiohttp.BasicAuth(self.coordinator.username, self.coordinator.password) \
+                if self.coordinator.username and self.coordinator.password else None
             await session.get(
                 f"{self.coordinator.base_url}{API_SWITCH_CONTROL}",
                 params=params,
