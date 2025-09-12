@@ -1,4 +1,4 @@
-"""Support for 2N IP Intercom switches with optional hold switches."""
+"""Support for 2N IP Intercom switches with optional hold and release switches."""
 from __future__ import annotations
 
 import asyncio
@@ -27,7 +27,7 @@ async def async_setup_entry(
         TwoNIntercomSwitch(coordinator, 1, f"{coordinator.device_name} Switch 1"),
     ]
 
-    # Add additional port/hold switches if available
+    # Add additional port/hold/release switches if available
     for switch_id, switch_info in enumerate(coordinator.data.get("ports", []), start=2):
         # Normal switch
         switches.append(
@@ -38,15 +38,11 @@ async def async_setup_entry(
             )
         )
 
-        # Add hold switch if bistable
+        # Add hold + release switches if bistable
         if switch_info.get("mode") == "bistable":
-            switches.append(
-                TwoNIntercomHoldSwitch(
-                    coordinator,
-                    switch_id,
-                    f"{switch_info.get('name', f'Switch {switch_id}')} Hold",
-                )
-            )
+            base_name = switch_info.get("name", f"Switch {switch_id}")
+            switches.append(TwoNIntercomHoldSwitch(coordinator, switch_id, f"{base_name} Hold"))
+            switches.append(TwoNIntercomReleaseSwitch(coordinator, switch_id, f"{base_name} Release"))
 
     async_add_entities(switches)
 
@@ -136,7 +132,7 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
 
 
 class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
-    """Hold switch for bistable 2N ports (uses hold/release actions)."""
+    """Hold switch for bistable 2N ports."""
 
     def __init__(self, coordinator, switch_id: int, name: str) -> None:
         super().__init__(coordinator)
@@ -150,39 +146,19 @@ class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
             model="IP Intercom",
         )
         self._state = False
-        self._release_task: asyncio.Task | None = None
 
     @property
     def is_on(self) -> bool:
-        """Return true if currently held."""
         return self._state
 
     async def async_turn_on(self, **kwargs) -> None:
-        """Send hold action, then auto-release after 5s."""
+        """Send hold action."""
         await self._send_action("hold")
         self._state = True
         self.async_write_ha_state()
 
-        # Cancel any existing auto-release task
-        if self._release_task and not self._release_task.done():
-            self._release_task.cancel()
-
-        async def auto_release():
-            try:
-                await asyncio.sleep(5)
-                await self._send_action("release")
-                self._state = False
-                self.async_write_ha_state()
-            except asyncio.CancelledError:
-                pass
-
-        self._release_task = self.hass.async_create_task(auto_release())
-
     async def async_turn_off(self, **kwargs) -> None:
-        """Send release action immediately."""
-        if self._release_task and not self._release_task.done():
-            self._release_task.cancel()
-
+        """Turning off hold will send release."""
         await self._send_action("release")
         self._state = False
         self.async_write_ha_state()
@@ -200,5 +176,56 @@ class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
                 params=params,
                 auth=auth,
             )
+        await self.coordinator.async_request_refresh()
 
+
+class TwoNIntercomReleaseSwitch(CoordinatorEntity, SwitchEntity):
+    """Release switch for bistable 2N ports."""
+
+    def __init__(self, coordinator, switch_id: int, name: str) -> None:
+        super().__init__(coordinator)
+        self._switch_id = switch_id
+        self._attr_name = name
+        self._attr_unique_id = f"{coordinator.host}_release_switch_{switch_id}"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.host)},
+            name=coordinator.device_name,
+            manufacturer="2N",
+            model="IP Intercom",
+        )
+        self._state = False
+
+    @property
+    def is_on(self) -> bool:
+        return self._state
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Send release action (stateless trigger)."""
+        await self._send_action("release")
+        self._state = True
+        self.async_write_ha_state()
+
+        # Auto reset state back to off
+        await asyncio.sleep(1)
+        self._state = False
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """No-op, release is momentary."""
+        self._state = False
+        self.async_write_ha_state()
+
+    async def _send_action(self, action: str) -> None:
+        params = {"switch": str(self._switch_id), "action": action}
+        async with aiohttp.ClientSession() as session:
+            auth = (
+                aiohttp.BasicAuth(self.coordinator.username, self.coordinator.password)
+                if self.coordinator.username and self.coordinator.password
+                else None
+            )
+            await session.get(
+                f"{self.coordinator.base_url}{API_SWITCH_CONTROL}",
+                params=params,
+                auth=auth,
+            )
         await self.coordinator.async_request_refresh()
