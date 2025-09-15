@@ -24,7 +24,7 @@ async def async_setup_entry(
 
     switches: list[SwitchEntity] = [
         TwoNIntercomDoorSwitch(coordinator),
-        TwoNIntercomSwitch(coordinator, 1, f"{coordinator.device_name} Switch 1"),
+        TwoNIntercomSwitch(coordinator, 1, f"{coordinator.device_name} Switch 01"),
     ]
 
     # Add additional port/hold switches if available
