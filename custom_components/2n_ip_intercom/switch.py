@@ -224,4 +224,5 @@ class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
             if close_session:
                 await session.close()
 
-        await self.coordinator.async_request_refresh()
+        # Don't refresh coordinator immediately to prevent state conflicts
+        # await self.coordinator.async_request_refresh()
