@@ -148,8 +148,6 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
 class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
     """Hold switch for bistable 2N ports (uses hold/release actions)."""
 
-    AUTO_RELEASE_SECONDS = 50  # Duration to hold before auto-release
-
     def __init__(self, coordinator: TwoNIntercomDataUpdateCoordinator, switch_id: int, name: str) -> None:
         super().__init__(coordinator)
         self._switch_id = switch_id
@@ -162,7 +160,6 @@ class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
             model="IP Intercom",
         )
         self._state = False
-        self._release_task: asyncio.Task | None = None
 
     @property
     def is_on(self) -> bool:
@@ -175,41 +172,22 @@ class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
         return self.coordinator.last_update_success
 
     async def async_turn_on(self, **kwargs) -> None:
-        """Send hold action, then auto-release after AUTO_RELEASE_SECONDS."""
+        """Send hold action and maintain state until manually turned off."""
         try:
             await self._send_action("hold")
             self._state = True
             self.async_write_ha_state()
+            _LOGGER.info("Hold switch %s activated", self._switch_id)
         except Exception as e:
             _LOGGER.error("Failed to hold switch %s: %s", self._switch_id, e)
-            return
-
-        # Cancel any existing auto-release task
-        if self._release_task and not self._release_task.done():
-            self._release_task.cancel()
-
-        async def auto_release():
-            try:
-                await asyncio.sleep(self.AUTO_RELEASE_SECONDS)
-                await self._send_action("release")
-                self._state = False
-                self.async_write_ha_state()
-            except asyncio.CancelledError:
-                pass
-            except Exception as e:
-                _LOGGER.error("Failed to auto-release switch %s: %s", self._switch_id, e)
-
-        self._release_task = self.hass.async_create_task(auto_release())
 
     async def async_turn_off(self, **kwargs) -> None:
-        """Send release action immediately and cancel any pending auto-release."""
-        if self._release_task and not self._release_task.done():
-            self._release_task.cancel()
-
+        """Send release action to turn off the hold switch."""
         try:
             await self._send_action("release")
             self._state = False
             self.async_write_ha_state()
+            _LOGGER.info("Hold switch %s released", self._switch_id)
         except Exception as e:
             _LOGGER.error("Failed to release switch %s: %s", self._switch_id, e)
 
