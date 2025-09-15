@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import aiohttp
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
@@ -12,6 +13,8 @@ from homeassistant.helpers.entity import DeviceInfo
 
 from .const import DOMAIN, API_SWITCH_CONTROL, API_DOOR_CONTROL
 from .coordinator import TwoNIntercomDataUpdateCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -47,6 +50,11 @@ async def async_setup_entry(
                     f"{switch_info.get('name', f'Switch {switch_id}')} Hold",
                 )
             )
+
+    # Debug logging to see what switches are being created
+    _LOGGER.debug("Creating %d switches for %s", len(switches), coordinator.device_name)
+    for switch in switches:
+        _LOGGER.debug("Switch: %s (ID: %s)", switch.name, switch.unique_id)
 
     async_add_entities(switches)
 
@@ -158,6 +166,11 @@ class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
     def is_on(self) -> bool:
         """Return True if currently held."""
         return self._state
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return self.coordinator.last_update_success
 
     async def async_turn_on(self, **kwargs) -> None:
         """Send hold action, then auto-release after AUTO_RELEASE_SECONDS."""
