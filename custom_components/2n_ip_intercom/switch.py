@@ -28,6 +28,8 @@ async def async_setup_entry(
     switches: list[SwitchEntity] = [
         TwoNIntercomDoorSwitch(coordinator),
         TwoNIntercomSwitch(coordinator, 1, f"{coordinator.device_name} Switch 01"),
+        # Test: Always create a Hold switch for Switch 01 to test functionality
+        TwoNIntercomHoldSwitch(coordinator, 1, f"{coordinator.device_name} Switch 01 Hold"),
     ]
 
     # Add additional port/hold switches if available
