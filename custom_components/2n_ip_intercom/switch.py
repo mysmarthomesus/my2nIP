@@ -148,7 +148,7 @@ class TwoNIntercomSwitch(CoordinatorEntity, SwitchEntity):
 class TwoNIntercomHoldSwitch(CoordinatorEntity, SwitchEntity):
     """Hold switch for bistable 2N ports (uses hold/release actions)."""
 
-    AUTO_RELEASE_SECONDS = 15  # Duration to hold before auto-release
+    AUTO_RELEASE_SECONDS = 50  # Duration to hold before auto-release
 
     def __init__(self, coordinator: TwoNIntercomDataUpdateCoordinator, switch_id: int, name: str) -> None:
         super().__init__(coordinator)
