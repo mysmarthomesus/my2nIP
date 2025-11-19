@@ -26,6 +26,7 @@ Restart Homeassistant
 
 You can set up the integration via the Home Assistant UI. When prompted, input the following:
 
+- **DeviceName**: Name can be given to device.
 - **Host**: The IP address or hostname of your 2N IP Intercom device.
 - **Port**: The port used by the device (default is 80).
 - **Username** (optional): Your device username, if any.
