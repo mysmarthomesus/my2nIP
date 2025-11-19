@@ -1,4 +1,5 @@
 # 2N IP Intercom for Home Assistant
+# This integration is developed by MySmartHomes , https://mysmarthomes.us 
 
 This custom component integrates the 2N IP Intercom via its HTTP API into Home Assistant. It supports both sensor and switch platforms.
 
