@@ -6,6 +6,7 @@ This custom component integrates the 2N IP Intercom via its HTTP API into Home A
 
 - **Sensor**: Polls the intercom status every 30 seconds.
 - **Switch**: Allows control of a switch function (if supported by the device).
+- **Switch Toggle**: Allows control of a switch toggle function , keeps the gate open till it is release.
 
 ## Installation
 HACS
